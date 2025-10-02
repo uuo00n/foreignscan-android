@@ -1,4 +1,3 @@
-// ==================== lib/screens/camera_screen.dart ====================
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../utils/camera_manager.dart';
