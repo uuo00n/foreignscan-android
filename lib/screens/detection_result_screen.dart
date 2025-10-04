@@ -2,13 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:foreignscan/models/detection_result.dart';
 import 'package:foreignscan/models/verification_record.dart';
 import 'package:foreignscan/widgets/verification_list.dart';
-
-// 临时定义，避免类型冲突
-typedef DetectionResultArguments = Map<String, dynamic>;
-
-// 临时枚举定义
-enum VerificationStatus { pending, verified, rejected }
-enum VerificationResult { normal, abnormal, unknown }
+import 'package:foreignscan/core/routes/app_router.dart';
+import 'package:foreignscan/core/widgets/app_bar_actions.dart';
 
 class DetectionResultScreen extends StatefulWidget {
   final DetectionResultArguments? arguments;
@@ -21,48 +16,106 @@ class DetectionResultScreen extends StatefulWidget {
 
 class _DetectionResultScreenState extends State<DetectionResultScreen> {
   late DetectionResult currentResult;
-  List<VerificationRecord> verificationRecords = [];
+  
+  // UI 常量
+  static const double _imageWidth = 600.0;
+  static const double _imageHeight = 450.0;
+  static const double _borderRadius = 4.0;
+  static const double _borderWidth = 3.0;
+  static const double _paddingSmall = 2.0;
+  static const Color _highSeverityColor = Colors.red;
+  static const Color _mediumSeverityColor = Colors.orange;
 
   @override
   void initState() {
     super.initState();
-    _loadMockData();
+    _loadData();
   }
 
-  void _loadMockData() {
-    // 模拟检测结果数据
-    currentResult = DetectionResult(
+  void _loadData() {
+    final args = widget.arguments;
+    currentResult = args != null 
+        ? _createResultFromArguments(args)
+        : _createMockDetectionResult();
+  }
+
+  DetectionResult _createResultFromArguments(DetectionResultArguments args) {
+    return DetectionResult(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      sceneName: args.imagePath.isNotEmpty ? '检测结果' : '未知场景',
+      imagePath: args.imagePath,
+      timestamp: DateTime.now(),
+      status: DetectionStatus.completed,
+      detectionType: args.detectionType,
+      issues: _createIssuesFromDetectionResults(args.detectionResults),
+    );
+  }
+
+  DetectionResult _createMockDetectionResult() {
+    return DetectionResult(
       id: '001',
       sceneName: '管道闸口',
       imagePath: 'assets/mock_detection_image.jpg',
       timestamp: DateTime.now(),
       status: DetectionStatus.completed,
-      issues: [
-        DetectionIssue(
-          id: 'issue_1',
-          type: IssueType.foreignObject,
-          description: '检测到金属异物',
-          x: 0.6,
-          y: 0.4,
-          width: 0.08,
-          height: 0.08,
-          severity: IssueSeverity.high,
-        ),
-        DetectionIssue(
-          id: 'issue_2',
-          type: IssueType.foreignObject,
-          description: '检测到异物',
-          x: 0.3,
-          y: 0.7,
-          width: 0.06,
-          height: 0.06,
-          severity: IssueSeverity.medium,
-        ),
-      ],
+      issues: _createMockIssues(),
     );
+  }
 
-    // 模拟核查记录数据
-    verificationRecords = [
+  List<DetectionIssue> _createIssuesFromDetectionResults(Map<String, dynamic>? results) {
+    // 这里应该根据实际的检测结果生成问题列表
+    // 暂时返回模拟数据
+    return [
+      DetectionIssue(
+        id: 'issue_1',
+        type: IssueType.foreignObject,
+        description: '检测到金属异物',
+        x: 0.6,
+        y: 0.4,
+        width: 0.08,
+        height: 0.08,
+        severity: IssueSeverity.high,
+      ),
+      DetectionIssue(
+        id: 'issue_2',
+        type: IssueType.foreignObject,
+        description: '检测到异物',
+        x: 0.3,
+        y: 0.7,
+        width: 0.06,
+        height: 0.06,
+        severity: IssueSeverity.medium,
+      ),
+    ];
+  }
+
+  List<DetectionIssue> _createMockIssues() {
+    return [
+      DetectionIssue(
+        id: 'issue_1',
+        type: IssueType.foreignObject,
+        description: '检测到金属异物',
+        x: 0.6,
+        y: 0.4,
+        width: 0.08,
+        height: 0.08,
+        severity: IssueSeverity.high,
+      ),
+      DetectionIssue(
+        id: 'issue_2',
+        type: IssueType.foreignObject,
+        description: '检测到异物',
+        x: 0.3,
+        y: 0.7,
+        width: 0.06,
+        height: 0.06,
+        severity: IssueSeverity.medium,
+      ),
+    ];
+  }
+
+  List<VerificationRecord> _createMockVerificationRecords() {
+    return [
       VerificationRecord(
         id: '001',
         sceneName: '管道闸口',
@@ -116,7 +169,7 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
             // 右侧核查记录列表
             Expanded(
               flex: 1,
-              child: VerificationList(records: verificationRecords),
+              child: VerificationList(records: _createMockVerificationRecords()),
             ),
           ],
         ),
@@ -126,36 +179,21 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      leading: IconButton(
-        icon: Icon(Icons.arrow_back, color: Colors.white),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Text('智能防异物检测系统', style: TextStyle(color: Colors.white)),
-      backgroundColor: Colors.blue,
+      leading: AppBarBackButton(),
+      title: const AppBarTitle(title: '智能防异物检测系统'),
       actions: [
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 4),
-          child: ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFF1976D2),
-              foregroundColor: Colors.white,
-            ),
-            child: Text('新建检测'),
-          ),
+        AppBarActions(
+          onNewDetectionPressed: () => Navigator.pop(context),
+          onDetectionResultsPressed: () {
+            // 当前已经在检测结果页面，可以显示提示或刷新
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('当前已在检测结果页面'),
+                backgroundColor: Colors.blue,
+              ),
+            );
+          },
         ),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 4),
-          child: ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
-            child: Text('检测结果'),
-          ),
-        ),
-        SizedBox(width: 16),
       ],
     );
   }
@@ -254,26 +292,24 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
 
   Widget _buildDetectionBox(DetectionIssue issue) {
     return Positioned(
-      left: issue.x * 600, // 模拟图片宽度
-      top: issue.y * 450,  // 模拟图片高度
+      left: issue.x * _imageWidth,
+      top: issue.y * _imageHeight,
       child: Container(
-        width: issue.width * 600,
-        height: issue.height * 450,
+        width: issue.width * _imageWidth,
+        height: issue.height * _imageHeight,
         decoration: BoxDecoration(
           border: Border.all(
-            color: issue.isHighSeverity ? Colors.red : Colors.orange,
-            width: 3,
+            color: issue.isHighSeverity ? _highSeverityColor : _mediumSeverityColor,
+            width: _borderWidth,
           ),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(_borderRadius),
         ),
         child: Container(
-          padding: EdgeInsets.all(2),
-          child: Container(
-            decoration: BoxDecoration(
-              color: (issue.isHighSeverity ? Colors.red : Colors.orange)
-                  .withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(2),
-            ),
+          padding: const EdgeInsets.all(_paddingSmall),
+          decoration: BoxDecoration(
+            color: (issue.isHighSeverity ? _highSeverityColor : _mediumSeverityColor)
+                .withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(_paddingSmall),
           ),
         ),
       ),

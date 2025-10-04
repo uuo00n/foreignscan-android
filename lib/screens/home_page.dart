@@ -9,6 +9,7 @@ import 'package:foreignscan/widgets/scene_display.dart';
 import 'package:foreignscan/widgets/records_section.dart';
 import 'package:foreignscan/models/inspection_record.dart';
 import 'package:foreignscan/screens/camera_screen.dart';
+import 'package:foreignscan/core/widgets/app_bar_actions.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -62,38 +63,15 @@ class HomePage extends ConsumerWidget {
       ),
       title: const Text('智能防异物检测系统'),
       actions: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: ElevatedButton.icon(
-            onPressed: () => _startNewInspection(context, ref),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('新建检测'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.secondary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        AppBarActions(
+          onNewDetectionPressed: () => _startNewInspection(context, ref),
+          onDetectionResultsPressed: () => AppRouter.navigateToDetectionResult(
+            const DetectionResultArguments(
+              imagePath: '',
+              detectionType: '',
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: ElevatedButton.icon(
-            onPressed: () => AppRouter.navigateToDetectionResult(
-              DetectionResultArguments(
-                imagePath: '',
-                detectionType: '',
-              ),
-            ),
-            icon: const Icon(Icons.analytics, size: 18),
-            label: const Text('检测结果'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
       ],
     );
   }

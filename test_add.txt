@@ -1,0 +1,40 @@
+      ),
+    ];
+  }
+
+  List<VerificationRecord> _createMockVerificationRecords() {
+    return [
+      VerificationRecord(
+        id: '001',
+        sceneName: '管道闸口',
+        imagePath: '',
+        timestamp: DateTime(2025, 7, 11, 14, 30),
+        status: 'verified',
+        verificationResult: 'normal',
+      ),
+      VerificationRecord(
+        id: '002',
+        sceneName: '主承轴区域',
+        imagePath: '',
+        timestamp: DateTime(2025, 7, 11, 14, 30),
+        status: 'verified',
+        verificationResult: 'abnormal',
+      ),
+      VerificationRecord(
+        id: '003',
+        sceneName: '冷却系统出口',
+        imagePath: '',
+        timestamp: DateTime(2025, 7, 11, 14, 30),
+        status: 'verified',
+        verificationResult: 'normal',
+      ),
+      VerificationRecord(
+        id: '004',
+        sceneName: '传动轴检测点',
+        imagePath: '',
+        timestamp: DateTime(2025, 7, 11, 14, 30),
+        status: 'verified',
+        verificationResult: 'normal',
+      ),
+    ];
+  }

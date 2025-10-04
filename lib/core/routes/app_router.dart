@@ -38,7 +38,7 @@ class AppRouter {
       case AppConstants.routeDetectionResult:
         if (args is DetectionResultArguments) {
           return MaterialPageRoute(
-            builder: (_) => DetectionResultScreen(arguments: args as Map<String, dynamic>?),
+            builder: (_) => DetectionResultScreen(arguments: args),
             settings: settings,
           );
         }
