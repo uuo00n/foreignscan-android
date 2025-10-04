@@ -5,6 +5,7 @@ import '../widgets/scene_selector.dart';
 import '../widgets/scene_display.dart';
 import '../widgets/records_section.dart';
 import 'camera_screen.dart';
+import 'detection_result_screen.dart';
 import '../utils/camera_manager.dart';
 
 class HomePage extends StatefulWidget {
@@ -150,7 +151,14 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 4),
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DetectionResultScreen(),
+                  ),
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
