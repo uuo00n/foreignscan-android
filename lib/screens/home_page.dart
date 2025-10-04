@@ -1,218 +1,304 @@
 import 'package:flutter/material.dart';
-import '../models/scene_data.dart';
-import '../models/inspection_record.dart';
-import '../widgets/scene_selector.dart';
-import '../widgets/scene_display.dart';
-import '../widgets/records_section.dart';
-import 'camera_screen.dart';
-import 'detection_result_screen.dart';
-import '../utils/camera_manager.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foreignscan/core/providers/home_providers.dart';
+import 'package:foreignscan/core/routes/app_router.dart';
+import 'package:foreignscan/core/widgets/loading_widget.dart';
+import 'package:foreignscan/core/widgets/error_widget.dart';
+import 'package:foreignscan/widgets/scene_selector.dart';
+import 'package:foreignscan/widgets/scene_display.dart';
+import 'package:foreignscan/widgets/records_section.dart';
+import 'package:foreignscan/models/inspection_record.dart';
+import 'package:foreignscan/screens/camera_screen.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerWidget {
+  const HomePage({super.key});
+
   @override
-  _HomePageState createState() => _HomePageState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final homeState = ref.watch(homeViewModelProvider);
+    final homeViewModel = ref.read(homeViewModelProvider.notifier);
 
-class _HomePageState extends State<HomePage> {
-  int selectedSceneIndex = 0;
-  int currentRecordPage = 0;
-  final int recordsPerPage = 4;
-
-  // 场景数据
-  final List<SceneData> scenes = [
-    SceneData(id: '001', name: '管道闸口'),
-    SceneData(id: '002', name: '主承轴区域'),
-    SceneData(id: '003', name: '冷却系统出口'),
-    SceneData(id: '004', name: '传动轴检测点'),
-    SceneData(id: '005', name: '润滑系统'),
-    SceneData(id: '006', name: '控制阀门'),
-    SceneData(id: '007', name: '进气管道'),
-    SceneData(id: '008', name: '排气系统'),
-    SceneData(id: '009', name: '温控单元'),
-  ];
-
-  // 拍摄记录
-  final List<InspectionRecord> inspectionRecords = [
-    InspectionRecord(
-      id: '001',
-      sceneName: '管道闸口',
-      imagePath: '',
-      timestamp: DateTime(2025, 7, 11, 14, 30),
-      status: '已确认',
-    ),
-    InspectionRecord(
-      id: '002',
-      sceneName: '主承轴区域',
-      imagePath: '',
-      timestamp: DateTime(2025, 7, 11, 14, 30),
-      status: '已确认',
-    ),
-    InspectionRecord(
-      id: '003',
-      sceneName: '冷却系统出口',
-      imagePath: '',
-      timestamp: DateTime(2025, 7, 11, 14, 30),
-      status: '已确认',
-    ),
-    InspectionRecord(
-      id: '004',
-      sceneName: '传动轴检测点',
-      imagePath: '',
-      timestamp: DateTime(2025, 7, 11, 14, 30),
-      status: '已确认',
-    ),
-  ];
-
-  void _selectScene(int index) {
-    setState(() {
-      selectedSceneIndex = index;
-    });
-  }
-
-  void _navigateToCamera() async {
-    if (!CameraManager.hasCameras()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('未检测到摄像头')),
-      );
-      return;
-    }
-
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CameraScreen(),
-      ),
-    );
-
-    if (result != null && result is String) {
-      setState(() {
-        scenes[selectedSceneIndex].capturedImage = result;
-        inspectionRecords.insert(
-          0,
-          InspectionRecord(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            sceneName: scenes[selectedSceneIndex].name,
-            imagePath: result,
-            timestamp: DateTime.now(),
-            status: '待确认',
-          ),
-        );
-      });
-    }
-  }
-
-  void _confirmTransfer() {
-    if (scenes[selectedSceneIndex].capturedImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('请先拍摄该场景')),
-      );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('正在传输数据...'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    Future.delayed(Duration(seconds: 2), () {
-      if (mounted) {
+    // 监听错误状态
+    ref.listen(homeViewModelProvider, (previous, next) {
+      if (next.errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('传输成功')),
+          SnackBar(
+            content: Text(next.errorMessage!),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: '重试',
+              textColor: Colors.white,
+              onPressed: () {
+                homeViewModel.clearError();
+                homeViewModel.refreshData();
+              },
+            ),
+          ),
         );
       }
     });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final totalPages = inspectionRecords.isEmpty
-        ? 0
-        : (inspectionRecords.length / recordsPerPage).ceil();
 
     return Scaffold(
-      appBar: AppBar(
-        leading: Icon(Icons.menu, color: Colors.white),
-        title: Text('智能防异物检测系统', style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.blue,
-        actions: [
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF1976D2),
-                foregroundColor: Colors.white,
-              ),
-              child: Text('新建检测'),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => DetectionResultScreen(),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-              child: Text('检测结果'),
-            ),
-          ),
-          SizedBox(width: 16),
-        ],
+      appBar: _buildAppBar(context, ref),
+      body: homeState.isLoading 
+          ? const LoadingWidget(message: '正在加载数据...')
+          : homeState.errorMessage != null
+              ? ErrorWidgetCustom(
+                  message: homeState.errorMessage!,
+                  onRetry: () => homeViewModel.refreshData(),
+                )
+              : _buildBody(context, ref, homeState, homeViewModel),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(BuildContext context, WidgetRef ref) {
+    return AppBar(
+      leading: IconButton(
+        icon: const Icon(Icons.menu),
+        onPressed: () {
+          // TODO: 打开抽屉菜单
+        },
       ),
-      body: Column(
-        children: [
-          Expanded(
-            flex: 6,
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SceneSelector(
-                    scenes: scenes,
-                    selectedIndex: selectedSceneIndex,
-                    onSceneSelected: _selectScene,
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: SceneDisplay(
-                      scene: scenes[selectedSceneIndex],
-                      onCaptureClick: _navigateToCamera,
-                      onConfirmTransfer: _confirmTransfer,
-                    ),
-                  ),
-                ],
-              ),
+      title: const Text('智能防异物检测系统'),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: ElevatedButton.icon(
+            onPressed: () => _startNewInspection(context, ref),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('新建检测'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.secondary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
           ),
-          RecordsSection(
-            records: inspectionRecords,
-            currentPage: currentRecordPage,
-            recordsPerPage: recordsPerPage,
-            totalPages: totalPages,
-            onPreviousPage: () {
-              if (currentRecordPage > 0) {
-                setState(() => currentRecordPage--);
-              }
-            },
-            onNextPage: () {
-              if (currentRecordPage < totalPages - 1) {
-                setState(() => currentRecordPage++);
-              }
-            },
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: ElevatedButton.icon(
+            onPressed: () => AppRouter.navigateToDetectionResult(
+              DetectionResultArguments(
+                imagePath: '',
+                detectionType: '',
+              ),
+            ),
+            icon: const Icon(Icons.analytics, size: 18),
+            label: const Text('检测结果'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
           ),
-        ],
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  Widget _buildBody(
+    BuildContext context,
+    WidgetRef ref,
+    HomeState homeState,
+    HomeViewModel homeViewModel,
+  ) {
+    if (homeState.scenes.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.inbox, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              '暂无场景数据',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '请联系管理员添加检测场景',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => homeViewModel.refreshData(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('刷新'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
+
+    return Column(
+      children: [
+        Expanded(
+          flex: 6,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SceneSelector(
+                  scenes: homeState.scenes,
+                  selectedIndex: homeState.selectedSceneIndex,
+                  onSceneSelected: (index) => homeViewModel.selectScene(index),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: SceneDisplay(
+                    scene: selectedScene,
+                    onCaptureClick: () => _navigateToCamera(context, ref),
+                    onConfirmTransfer: () => _confirmTransfer(context, ref),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        RecordsSection(
+          records: homeState.inspectionRecords,
+          currentPage: homeState.currentRecordPage,
+          recordsPerPage: homeState.recordsPerPage,
+          totalPages: homeState.totalPages,
+          onPreviousPage: () => homeViewModel.previousRecordPage(),
+          onNextPage: () => homeViewModel.nextRecordPage(),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _startNewInspection(BuildContext context, WidgetRef ref) async {
+    final homeViewModel = ref.read(homeViewModelProvider.notifier);
+    
+    if (ref.read(homeViewModelProvider).scenes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('暂无可用检测场景'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // 重置到第一个场景
+    homeViewModel.selectScene(0);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('请选择检测场景开始检测'),
+        backgroundColor: Colors.green,
       ),
     );
+  }
+
+  Future<void> _navigateToCamera(BuildContext context, WidgetRef ref) async {
+    final homeState = ref.read(homeViewModelProvider);
+    final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
+    
+    try {
+      // 使用新的路由系统导航到相机页面
+      final imagePath = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const CameraScreen(),
+        ),
+      );
+      
+      // 处理相机返回的结果
+      if (imagePath != null) {
+        final homeViewModel = ref.read(homeViewModelProvider.notifier);
+        await homeViewModel.updateSceneImage(selectedScene.id, imagePath);
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('照片拍摄成功'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('相机初始化失败: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmTransfer(BuildContext context, WidgetRef ref) async {
+    final homeState = ref.read(homeViewModelProvider);
+    final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
+    final homeViewModel = ref.read(homeViewModelProvider.notifier);
+
+    if (selectedScene.capturedImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('请先拍摄该场景'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // 显示加载状态
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              CircularProgressIndicator(strokeWidth: 2),
+              SizedBox(width: 12),
+              Text('正在传输数据...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // TODO: 实现实际的数据传输逻辑
+      await Future.delayed(const Duration(seconds: 2));
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('传输成功'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // 添加检测记录
+        final newRecord = InspectionRecord(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          sceneName: selectedScene.name,
+          imagePath: selectedScene.capturedImage!,
+          timestamp: DateTime.now(),
+          status: '已确认',
+        );
+
+        await homeViewModel.addInspectionRecord(newRecord);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('传输失败: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

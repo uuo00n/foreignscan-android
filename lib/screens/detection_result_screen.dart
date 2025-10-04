@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
-import '../models/detection_result.dart';
-import '../models/verification_record.dart';
-import '../widgets/verification_list.dart';
+import 'package:foreignscan/models/detection_result.dart';
+import 'package:foreignscan/models/verification_record.dart';
+import 'package:foreignscan/widgets/verification_list.dart';
+
+// 临时定义，避免类型冲突
+typedef DetectionResultArguments = Map<String, dynamic>;
+
+// 临时枚举定义
+enum VerificationStatus { pending, verified, rejected }
+enum VerificationResult { normal, abnormal, unknown }
 
 class DetectionResultScreen extends StatefulWidget {
+  final DetectionResultArguments? arguments;
+  
+  const DetectionResultScreen({super.key, this.arguments});
+  
   @override
-  _DetectionResultScreenState createState() => _DetectionResultScreenState();
+  State<DetectionResultScreen> createState() => _DetectionResultScreenState();
 }
 
 class _DetectionResultScreenState extends State<DetectionResultScreen> {
@@ -25,27 +36,27 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
       sceneName: '管道闸口',
       imagePath: 'assets/mock_detection_image.jpg',
       timestamp: DateTime.now(),
-      status: '检测完成',
+      status: DetectionStatus.completed,
       issues: [
         DetectionIssue(
           id: 'issue_1',
-          type: '异物',
+          type: IssueType.foreignObject,
           description: '检测到金属异物',
           x: 0.6,
           y: 0.4,
           width: 0.08,
           height: 0.08,
-          severity: '高',
+          severity: IssueSeverity.high,
         ),
         DetectionIssue(
           id: 'issue_2',
-          type: '异物',
+          type: IssueType.foreignObject,
           description: '检测到异物',
           x: 0.3,
           y: 0.7,
           width: 0.06,
           height: 0.06,
-          severity: '中',
+          severity: IssueSeverity.medium,
         ),
       ],
     );
@@ -57,32 +68,32 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
         sceneName: '管道闸口',
         imagePath: '',
         timestamp: DateTime(2025, 7, 11, 14, 30),
-        status: '已处理',
-        verificationResult: '已确认',
+        status: 'verified',
+        verificationResult: 'normal',
       ),
       VerificationRecord(
         id: '002',
         sceneName: '主承轴区域',
         imagePath: '',
         timestamp: DateTime(2025, 7, 11, 14, 30),
-        status: '已处理',
-        verificationResult: '异常',
+        status: 'verified',
+        verificationResult: 'abnormal',
       ),
       VerificationRecord(
         id: '003',
         sceneName: '冷却系统出口',
         imagePath: '',
         timestamp: DateTime(2025, 7, 11, 14, 30),
-        status: '已处理',
-        verificationResult: '已确认',
+        status: 'verified',
+        verificationResult: 'normal',
       ),
       VerificationRecord(
         id: '004',
         sceneName: '传动轴检测点',
         imagePath: '',
         timestamp: DateTime(2025, 7, 11, 14, 30),
-        status: '已处理',
-        verificationResult: '已确认',
+        status: 'verified',
+        verificationResult: 'normal',
       ),
     ];
   }
@@ -250,7 +261,7 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
         height: issue.height * 450,
         decoration: BoxDecoration(
           border: Border.all(
-            color: issue.severity == '高' ? Colors.red : Colors.orange,
+            color: issue.isHighSeverity ? Colors.red : Colors.orange,
             width: 3,
           ),
           borderRadius: BorderRadius.circular(4),
@@ -259,8 +270,8 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
           padding: EdgeInsets.all(2),
           child: Container(
             decoration: BoxDecoration(
-              color: (issue.severity == '高' ? Colors.red : Colors.orange)
-                  .withOpacity(0.2),
+              color: (issue.isHighSeverity ? Colors.red : Colors.orange)
+                  .withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(2),
             ),
           ),

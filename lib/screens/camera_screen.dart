@@ -1,88 +1,163 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camera/camera.dart';
-import '../utils/camera_manager.dart';
+import 'package:foreignscan/core/providers/camera_providers.dart';
+import 'package:foreignscan/core/widgets/loading_widget.dart';
+import 'package:foreignscan/core/widgets/error_widget.dart';
 
-class CameraScreen extends StatefulWidget {
+class CameraScreen extends ConsumerStatefulWidget {
+  const CameraScreen({super.key});
+
   @override
-  _CameraScreenState createState() => _CameraScreenState();
+  ConsumerState<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> {
-  CameraController? _controller;
-  Future<void>? _initializeControllerFuture;
-
+class _CameraScreenState extends ConsumerState<CameraScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
+    _checkPermissionsAndInitialize();
   }
 
-  void _initializeCamera() {
-    final camera = CameraManager.getFirstCamera();
-    if (camera != null) {
-      _controller = CameraController(camera, ResolutionPreset.high);
-      _initializeControllerFuture = _controller!.initialize();
+  Future<void> _checkPermissionsAndInitialize() async {
+    // 检查相机权限
+    final hasPermission = await ref.read(cameraServiceProvider).requestCameraPermission();
+    
+    if (!hasPermission) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('需要相机权限才能拍照'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
     }
+
+    // 初始化相机
+    ref.read(cameraControllerProvider.notifier).refreshCamera();
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    ref.read(cameraControllerProvider.notifier).disposeCamera();
     super.dispose();
   }
 
   Future<void> _takePicture() async {
     try {
-      await _initializeControllerFuture;
-      final image = await _controller!.takePicture();
-      Navigator.pop(context, image.path);
+      final imagePath = await ref.read(cameraControllerProvider.notifier).takePicture();
+      if (mounted && imagePath != null) {
+        Navigator.pop(context, imagePath);
+      }
     } catch (e) {
-      print('拍照失败: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('拍照失败: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('拍照失败: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
+  }
+
+  Future<void> _switchCamera() async {
+    final cameras = await ref.read(availableCamerasProvider.future);
+    if (cameras.length <= 1) return;
+
+    final currentIndex = ref.read(selectedCameraProvider);
+    final nextIndex = (currentIndex + 1) % cameras.length;
+    
+    ref.read(cameraControllerProvider.notifier).switchCamera(nextIndex);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!CameraManager.hasCameras() || _controller == null) {
-      return Scaffold(
-        appBar: AppBar(title: Text('相机'), backgroundColor: Colors.black),
-        body: Center(child: Text('无法访问相机')),
-      );
-    }
+    final cameraState = ref.watch(cameraControllerProvider);
+    final camerasAsync = ref.watch(availableCamerasProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text('拍摄照片'), backgroundColor: Colors.black),
-      body: FutureBuilder<void>(
-        future: _initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            return Stack(
-              children: [
-                CameraPreview(_controller!),
-                Positioned(
-                  bottom: 30,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: FloatingActionButton(
-                      onPressed: _takePicture,
-                      backgroundColor: Colors.white,
-                      child: Icon(Icons.camera, color: Colors.black, size: 32),
-                      heroTag: 'capture',
-                    ),
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('拍摄照片'),
+        backgroundColor: Colors.black87,
+        foregroundColor: Colors.white,
+        actions: [
+          camerasAsync.when(
+            data: (cameras) {
+              if (cameras.length > 1) {
+                return IconButton(
+                  icon: const Icon(Icons.flip_camera_ios),
+                  onPressed: _switchCamera,
+                  tooltip: '切换相机',
+                );
+              }
+              return const SizedBox.shrink();
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+        ],
+      ),
+      body: cameraState.when(
+        loading: () => const LoadingWidget(
+          message: '正在初始化相机...',
+          color: Colors.white,
+        ),
+        error: (error, stackTrace) => ErrorWidgetCustom(
+          message: '相机初始化失败: $error',
+          onRetry: () => ref.read(cameraControllerProvider.notifier).refreshCamera(),
+          icon: Icons.camera_alt,
+        ),
+        data: (controller) {
+          if (controller == null) {
+            return ErrorWidgetCustom(
+              message: '无法访问相机设备',
+              onRetry: () => ref.read(cameraControllerProvider.notifier).refreshCamera(),
+              icon: Icons.camera_alt,
+            );
+          }
+
+          return Stack(
+            children: [
+              // 相机预览
+              Positioned.fill(
+                child: CameraPreview(controller),
+              ),
+              
+              // 拍照按钮
+              Positioned(
+                bottom: 30,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: FloatingActionButton(
+                    onPressed: _takePicture,
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    child: const Icon(Icons.camera, size: 32),
                   ),
                 ),
-              ],
-            );
-          } else {
-            return Center(child: CircularProgressIndicator());
-          }
+              ),
+              
+              // 返回按钮
+              Positioned(
+                top: 40,
+                left: 16,
+                child: SafeArea(
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ),
+            ],
+          );
         },
       ),
-      backgroundColor: Colors.black,
     );
   }
 }
