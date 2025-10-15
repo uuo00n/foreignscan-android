@@ -24,18 +24,43 @@ class SceneDisplay extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black12,
+            color: scene.isTransferred ? Colors.green[200]! : Colors.black12,
             blurRadius: 4,
             offset: Offset(0, 2),
           ),
         ],
+        border: Border.all(
+          color: scene.isTransferred ? Colors.green : Colors.grey[300]!,
+          width: scene.isTransferred ? 2 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '场景：${scene.id} - ${scene.name}',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Text(
+                '场景：${scene.id} - ${scene.name}',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              if (scene.isTransferred) ...[
+                SizedBox(width: 8),
+                Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 20,
+                ),
+                SizedBox(width: 4),
+                Text(
+                  '已传输',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
           ),
           SizedBox(height: 16),
           Expanded(
@@ -52,10 +77,10 @@ class SceneDisplay extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
               onPressed: onConfirmTransfer,
-              icon: Icon(Icons.check_circle),
-              label: Text('确认传输'),
+              icon: Icon(scene.isTransferred ? Icons.refresh : Icons.check_circle),
+              label: Text(scene.isTransferred ? '重新传输' : '确认传输'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
+                backgroundColor: scene.isTransferred ? Colors.orange : Colors.blue,
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               ),

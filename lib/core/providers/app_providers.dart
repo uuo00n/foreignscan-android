@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 import 'package:logger/logger.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:foreignscan/core/services/usb_transfer_service.dart';
 
 // 全局服务提供者
 final sharedPreferencesProvider = FutureProvider<SharedPreferences>((ref) async {
@@ -129,4 +130,9 @@ final connectivityProvider = StreamProvider<bool>((ref) {
 final isOnlineProvider = Provider<bool>((ref) {
   final connectivityAsync = ref.watch(connectivityProvider);
   return connectivityAsync.value ?? true;
+});
+
+// USB传输服务提供者
+final usbTransferServiceProvider = Provider<UsbTransferService>((ref) {
+  return UsbTransferService(ref.read(loggerProvider));
 });

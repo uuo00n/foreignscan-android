@@ -3,12 +3,16 @@ import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/models/inspection_record.dart';
 import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/record_service.dart';
+import 'package:foreignscan/core/services/usb_transfer_service.dart';
+
+import 'app_providers.dart';
 
 // Home页面状态提供者
 final homeViewModelProvider = StateNotifierProvider<HomeViewModel, HomeState>((ref) {
   return HomeViewModel(
     ref.read(sceneServiceProvider),
     ref.read(recordServiceProvider),
+    ref.read(usbTransferServiceProvider),
   );
 });
 
@@ -75,8 +79,9 @@ class HomeState {
 class HomeViewModel extends StateNotifier<HomeState> {
   final SceneService _sceneService;
   final RecordService _recordService;
+  final UsbTransferService _usbTransferService;
 
-  HomeViewModel(this._sceneService, this._recordService) : super(const HomeState()) {
+  HomeViewModel(this._sceneService, this._recordService, this._usbTransferService) : super(const HomeState()) {
     _initializeData();
   }
 
@@ -135,7 +140,12 @@ class HomeViewModel extends StateNotifier<HomeState> {
     try {
       final updatedScenes = state.scenes.map((scene) {
         if (scene.id == sceneId) {
-          return scene.copyWith(capturedImage: imagePath);
+          return scene.copyWith(
+            capturedImage: imagePath,
+            captureTime: DateTime.now(), // Set the capture time to now
+            isTransferred: false, // Mark as not transferred since new image was captured
+            transferTime: null, // Clear transfer time
+          );
         }
         return scene;
       }).toList();
@@ -145,6 +155,99 @@ class HomeViewModel extends StateNotifier<HomeState> {
       await _sceneService.updateSceneImage(sceneId, imagePath);
     } catch (e) {
       state = state.copyWith(errorMessage: '更新场景图片失败: $e');
+    }
+  }
+
+  /// Transfers captured images and timestamps via USB to Windows
+  Future<bool> transferViaUsb({String? specificSceneId}) async {
+    try {
+      // Request necessary permissions first
+      final permissionsGranted = await _usbTransferService.requestUsbPermissions();
+      if (!permissionsGranted) {
+        state = state.copyWith(errorMessage: '未获得必要的权限进行USB传输，请在设置中授权');
+        return false;
+      }
+
+      // Check if USB device is connected
+      final isDeviceConnected = await _usbTransferService.isUsbDeviceConnected();
+      if (!isDeviceConnected) {
+        state = state.copyWith(errorMessage: '未检测到USB设备，请连接Windows设备');
+        return false;
+      }
+
+      // Get available transfer paths
+      final transferPaths = await _usbTransferService.getAvailableTransferPaths();
+      if (transferPaths.isEmpty) {
+        state = state.copyWith(errorMessage: '未找到可用的USB传输路径');
+        return false;
+      }
+
+      // Select the first available path (in real implementation, user might choose)
+      final targetPath = transferPaths.first;
+
+      // Filter scenes based on whether we're transferring all scenes or a specific one
+      final scenesToTransfer = specificSceneId != null
+          ? state.scenes.where((scene) => scene.id == specificSceneId).toList()
+          : state.scenes;
+
+      // Prepare the transfer package to show progress
+      final transferPackage = await _usbTransferService.prepareTransferPackage(scenesToTransfer);
+      
+      // Perform the actual transfer
+      final success = await _usbTransferService.transferToWindows(
+        scenes: scenesToTransfer,
+        targetDirectory: targetPath,
+      );
+
+      if (success) {
+        // Update scenes to mark them as transferred
+        final updatedScenes = state.scenes.map((scene) {
+          if (specificSceneId != null) {
+            // Only update the specific scene
+            if (scene.id == specificSceneId) {
+              return scene.copyWith(
+                isTransferred: true,
+                transferTime: DateTime.now(),
+              );
+            }
+          } else {
+            // Update all scenes that have captured images
+            if (scene.capturedImage != null) {
+              return scene.copyWith(
+                isTransferred: true,
+                transferTime: DateTime.now(),
+              );
+            }
+          }
+          return scene;
+        }).toList();
+
+        // Update the state with transferred scenes
+        state = state.copyWith(scenes: updatedScenes);
+
+        // Add a record of the successful transfer
+        final transferRecord = InspectionRecord(
+          id: 'transfer_${DateTime.now().millisecondsSinceEpoch}',
+          sceneName: specificSceneId != null ? '单场景传输' : '批量传输',
+          imagePath: '',
+          timestamp: DateTime.now(),
+          status: '传输成功',
+        );
+        await addInspectionRecord(transferRecord);
+        
+        // Clear error message if transfer was successful
+        if (state.errorMessage?.contains('传输') == true) {
+          state = state.copyWith(errorMessage: null);
+        }
+        
+        return true;
+      } else {
+        state = state.copyWith(errorMessage: 'USB传输失败');
+        return false;
+      }
+    } catch (e, stackTrace) {
+      state = state.copyWith(errorMessage: 'USB传输过程中发生错误: $e');
+      return false;
     }
   }
 

@@ -233,46 +233,46 @@ class HomePage extends ConsumerWidget {
 
     try {
       // 显示加载状态
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              CircularProgressIndicator(strokeWidth: 2),
-              SizedBox(width: 12),
-              Text('正在传输数据...'),
-            ],
-          ),
-          duration: Duration(seconds: 2),
+      final snackBar = SnackBar(
+        content: Row(
+          children: [
+            const CircularProgressIndicator(strokeWidth: 2),
+            const SizedBox(width: 12),
+            Text('正在通过USB传输 "${selectedScene.name}" ...'),
+          ],
         ),
+        duration: const Duration(seconds: 10), // Increased duration to allow for actual transfer
       );
+      
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
 
-      // TODO: 实现实际的数据传输逻辑
-      await Future.delayed(const Duration(seconds: 2));
+      // Perform USB transfer for the specific scene
+      final success = await homeViewModel.transferViaUsb(specificSceneId: selectedScene.id);
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('传输成功'),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        // 添加检测记录
-        final newRecord = InspectionRecord(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          sceneName: selectedScene.name,
-          imagePath: selectedScene.capturedImage!,
-          timestamp: DateTime.now(),
-          status: '已确认',
-        );
-
-        await homeViewModel.addInspectionRecord(newRecord);
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('USB传输成功: ${selectedScene.name}'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          // The error message should already be in the state
+          final error = ref.read(homeViewModelProvider).errorMessage;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('USB传输失败: ${error ?? "未知错误"}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('传输失败: $e'),
+            content: Text('传输过程中出现异常: $e'),
             backgroundColor: Colors.red,
           ),
         );

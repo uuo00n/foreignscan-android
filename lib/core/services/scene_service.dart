@@ -57,7 +57,10 @@ class SceneService {
       final scenes = await getScenes();
       final updatedScenes = scenes.map((scene) {
         if (scene.id == sceneId) {
-          return scene.copyWith(capturedImage: imagePath);
+          return scene.copyWith(
+            capturedImage: imagePath,
+            captureTime: DateTime.now(), // Set the capture time to now
+          );
         }
         return scene;
       }).toList();
