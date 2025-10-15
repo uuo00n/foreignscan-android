@@ -61,6 +61,7 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
         camera,
         ResolutionPreset.high,
         enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.yuv420, // Better compatibility with Impeller
       );
 
       await _currentController!.initialize();
@@ -102,7 +103,14 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
         throw Exception('正在拍照中');
       }
 
+      // Ensure preview is ready before taking picture
+      if (!controller.value.isPreviewPaused) {
+        await controller.lockCaptureOrientation();
+      }
+
       final image = await controller.takePicture();
+      await controller.unlockCaptureOrientation();
+      
       _ref.read(loggerProvider).i('拍照成功: ${image.path}');
       return image.path;
     } catch (e, stackTrace) {
@@ -117,7 +125,9 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
 
   Future<void> disposeCamera() async {
     if (_currentController != null) {
-      await _currentController!.dispose();
+      if (_currentController!.value.isInitialized) {
+        await _currentController!.dispose();
+      }
       _currentController = null;
       state = const AsyncValue.data(null);
     }

@@ -4,6 +4,7 @@ import 'package:logger/logger.dart';
 import 'package:path/path.dart' as path;
 import 'package:foreignscan/models/scene_data.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class UsbTransferService {
   final Logger _logger;
@@ -22,8 +23,9 @@ class UsbTransferService {
       // First check if we have the necessary permissions
       final permissionsGranted = await _checkStoragePermission();
       if (!permissionsGranted) {
-        _logger.e('没有必要的权限进行USB传输');
-        return false;
+        _logger.e('没有必要的权限进行USB传输。请在设置中开启存储权限。');
+        // Provide a more user-friendly error
+        throw Exception('没有必要的存储权限，请在设置中开启权限后重试');
       }
 
       _logger.i('开始USB传输过程，目标目录: $targetDirectory');
@@ -60,6 +62,10 @@ class UsbTransferService {
       return true;
     } catch (e, stackTrace) {
       _logger.e('USB传输失败', error: e, stackTrace: stackTrace);
+      // Provide specific error message for permission-related issues
+      if (e.toString().contains('Permission') || e.toString().contains('Storage')) {
+        _logger.e('可能是权限问题，请检查应用权限设置');
+      }
       return false;
     }
   }
@@ -161,7 +167,7 @@ class UsbTransferService {
       // Check storage permissions first
       final permissionGranted = await _checkStoragePermission();
       if (!permissionGranted) {
-        _logger.w('存储权限未授予，无法访问USB设备');
+        _logger.w('存储权限未授予，无法访问USB设备。请在设置中开启权限。');
         return false;
       }
 
@@ -174,6 +180,10 @@ class UsbTransferService {
       return true;
     } catch (e) {
       _logger.e('检查USB设备连接时出错', error: e);
+      // Provide more specific error info
+      if (e.toString().contains('Permission')) {
+        _logger.e('权限错误，请检查应用权限设置');
+      }
       return false;
     }
   }
@@ -181,26 +191,96 @@ class UsbTransferService {
   /// Check if storage permission is granted
   Future<bool> _checkStoragePermission() async {
     try {
-      // Check if we have storage permissions
-      final status = await Permission.storage.request();
+      PermissionStatus status;
+      
+      if (Platform.isAndroid) {
+        // For Android 13+ (API 33+), use the newer photo/media permissions
+        // For Android 11-12 (API 30-32), use MANAGE_EXTERNAL_STORAGE for full access
+        // For older versions, use the legacy storage permission
+        
+        // Get Android API level
+        int androidApiLevel = await _getAndroidApiLevel();
+        
+        if (androidApiLevel >= 33) { // Android 13+
+          // For Android 13+, request media permissions instead of full storage access
+          _logger.d('Android 13+ detected (API $androidApiLevel), requesting media permissions');
+          
+          // Try photos permission first
+          status = await Permission.photos.request();
+          _logger.d('Photos permission status: ${status}');
+          
+          if (!status.isGranted) {
+            _logger.w('Photos permission denied, attempting to request storage permission');
+            status = await Permission.storage.request();
+            _logger.d('Storage permission status: ${status}');
+          }
+        } else if (androidApiLevel >= 30) { // Android 11-12 (Scoped Storage)
+          // For Android 11+, MANAGE_EXTERNAL_STORAGE permission is needed for full access
+          _logger.d('Android 11+ detected (API $androidApiLevel), requesting manage external storage permission');
+          status = await Permission.manageExternalStorage.request();
+          _logger.d('Manage external storage permission status: ${status}');
+          
+          if (!status.isGranted) {
+            _logger.w('Manage external storage permission denied, falling back to storage permission');
+            status = await Permission.storage.request();
+            _logger.d('Storage permission status: ${status}');
+          }
+        } else {
+          // For older Android versions, traditional storage permission
+          _logger.d('Older Android version (API $androidApiLevel), requesting traditional storage permission');
+          status = await Permission.storage.request();
+          _logger.d('Storage permission status: ${status}');
+        }
+      } else if (Platform.isIOS) {
+        // For iOS, request photos permission
+        status = await Permission.photos.request();
+        _logger.d('iOS photos permission status: ${status}');
+      } else {
+        // For other platforms, try the storage permission
+        status = await Permission.storage.request();
+        _logger.d('Non-Android platform storage permission status: ${status}');
+      }
       
       if (status.isGranted) {
         _logger.d('存储权限已授予');
         return true;
       } else if (status.isDenied) {
-        _logger.w('存储权限被拒绝');
+        _logger.w('存储权限被拒绝，请在设置中手动开启');
         return false;
       } else if (status.isPermanentlyDenied) {
         _logger.e('存储权限被永久拒绝，需要引导用户到设置页面');
         // Optionally open app settings
         openAppSettings();
         return false;
+      } else if (status.isLimited) {
+        _logger.d('存储权限被限制（仅部分允许）');
+        return true; // For limited access, we can still proceed with media access
       }
       
+      _logger.w('未知的权限状态: ${status}');
       return false;
     } catch (e) {
       _logger.e('检查存储权限时出错', error: e);
       return false;
+    }
+  }
+  
+  /// Get Android API level from device info
+  Future<int> _getAndroidApiLevel() async {
+    try {
+      if (Platform.isAndroid) {
+        DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+        AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+        int apiLevel = androidInfo.version.sdkInt;
+        _logger.d('Detected Android API level: $apiLevel');
+        return apiLevel;
+      } else {
+        // For non-Android platforms, return a default
+        return 30; // Default to Android 11 behavior
+      }
+    } catch (e) {
+      _logger.e('解析Android API级别时出错: $e');
+      return 30; // Default to Android 11 behavior
     }
   }
 
@@ -209,16 +289,34 @@ class UsbTransferService {
     try {
       _logger.d('请求USB/MTP相关权限...');
       
-      // For Android 13 and above, we need specific permissions
-      // For older versions, storage permission is sufficient
-      List<Permission> permissions = [
-        Permission.storage,
-      ];
-
-      // On newer Android versions, we might need additional permissions
+      List<Permission> permissions = [];
+      
+      // Depending on the Android version, request appropriate permissions
       if (Platform.isAndroid) {
-        // Check Android version and request appropriate permissions
-        permissions.add(Permission.manageExternalStorage);
+        int androidApiLevel = await _getAndroidApiLevel();
+        
+        if (androidApiLevel >= 33) { // Android 13+
+          // Android 13+ requires media permissions instead of full storage access
+          _logger.d('Android 13+ detected (API $androidApiLevel), requesting media permissions');
+          permissions.add(Permission.photos);
+          permissions.add(Permission.videos);
+        } else if (androidApiLevel >= 30) { // Android 11-12 (Scoped Storage)
+          // Android 11+ may need MANAGE_EXTERNAL_STORAGE for full access
+          _logger.d('Android 11+ detected (API $androidApiLevel), requesting manage external storage permission');
+          permissions.add(Permission.manageExternalStorage);
+        } else {
+          // For older Android versions
+          _logger.d('Older Android version (API $androidApiLevel), requesting storage permission');
+          permissions.add(Permission.storage);
+        }
+      } else if (Platform.isIOS) {
+        // For iOS, request photos permission
+        _logger.d('iOS detected, requesting photos permission');
+        permissions.add(Permission.photos);
+      } else {
+        // For other platforms
+        _logger.d('Non-Android platform, requesting storage permission');
+        permissions.add(Permission.storage);
       }
 
       // Request all permissions
@@ -227,8 +325,10 @@ class UsbTransferService {
       bool allGranted = true;
       for (final entry in statuses.entries) {
         if (!entry.value.isGranted) {
-          _logger.w('权限被拒绝: ${entry.key}');
+          _logger.w('权限被拒绝: ${entry.key} (状态: ${entry.value})');
           allGranted = false;
+        } else {
+          _logger.d('权限已授予: ${entry.key}');
         }
       }
 
@@ -236,6 +336,8 @@ class UsbTransferService {
         _logger.i('所有必要权限已授予');
       } else {
         _logger.w('部分权限被拒绝，功能可能受限');
+        // Show user-friendly message about permissions
+        _logger.w('请在应用设置中手动开启必要的权限以正常使用USB传输功能');
       }
 
       return allGranted;
