@@ -110,11 +110,36 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
 
       final image = await controller.takePicture();
       await controller.unlockCaptureOrientation();
-      
+
       _ref.read(loggerProvider).i('拍照成功: ${image.path}');
       return image.path;
     } catch (e, stackTrace) {
       _ref.read(loggerProvider).e('拍照失败', error: e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<String?> takePictureAndSaveToShared() async {
+    try {
+      final imagePath = await takePicture();
+      if (imagePath == null) {
+        return null;
+      }
+
+      // 请求存储权限
+      final cameraService = _ref.read(cameraServiceProvider);
+      final hasStoragePermission = await cameraService.requestStoragePermission();
+      if (!hasStoragePermission) {
+        throw Exception('存储权限被拒绝，无法保存图片');
+      }
+
+      // 保存到共享目录
+      final sharedPath = await cameraService.saveImageToSharedDirectory(imagePath);
+
+      _ref.read(loggerProvider).i('图片已保存到共享目录: $sharedPath');
+      return sharedPath;
+    } catch (e, stackTrace) {
+      _ref.read(loggerProvider).e('拍照并保存到共享目录失败', error: e, stackTrace: stackTrace);
       rethrow;
     }
   }

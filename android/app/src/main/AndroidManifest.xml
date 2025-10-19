@@ -1,22 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.CAMERA"/>
-    <!-- For Android 11 and above: Request MANAGE_EXTERNAL_STORAGE for full file access -->
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" 
-                     android:minSdkVersion="30" />
+    <!-- Network permissions for USB transfer -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
     <!-- For Android 13 and above: Request specific media permissions -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
                      android:minSdkVersion="33" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"
+                     android:minSdkVersion="33" />
+    <uses-permission android:name="android.permission.WRITE_MEDIA_IMAGES"
+                     android:minSdkVersion="33" />
+    <uses-permission android:name="android.permission.WRITE_MEDIA_VIDEO"
                      android:minSdkVersion="33" />
     <!-- Legacy permissions for older Android versions -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
                      android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
                      android:maxSdkVersion="32" />
-    <!-- For Android 11 and above: Request MANAGE_EXTERNAL_STORAGE for full file access -->
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-                     tools:ignore="ScopedStorage" />
     <uses-feature android:name="android.hardware.camera" android:required="true"/>
     <uses-feature android:name="android.hardware.camera.autofocus"/>
     <uses-feature android:name="android.hardware.camera.front"/>

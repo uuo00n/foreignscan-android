@@ -1,9 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/models/inspection_record.dart';
+import 'package:foreignscan/core/models/transfer_error.dart';
 import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/record_service.dart';
-import 'package:foreignscan/core/services/usb_transfer_service.dart';
+import 'package:foreignscan/services/usb_transfer_service.dart';
 
 import 'app_providers.dart';
 
@@ -35,6 +36,7 @@ class HomeState {
   final int recordsPerPage;
   final bool isLoading;
   final String? errorMessage;
+  final TransferErrorType? transferError;
   final List<SceneData> scenes;
   final List<InspectionRecord> inspectionRecords;
 
@@ -44,6 +46,7 @@ class HomeState {
     this.recordsPerPage = 4,
     this.isLoading = false,
     this.errorMessage,
+    this.transferError,
     this.scenes = const [],
     this.inspectionRecords = const [],
   });
@@ -54,6 +57,7 @@ class HomeState {
     int? recordsPerPage,
     bool? isLoading,
     String? errorMessage,
+    TransferErrorType? transferError,
     List<SceneData>? scenes,
     List<InspectionRecord>? inspectionRecords,
   }) {
@@ -63,14 +67,15 @@ class HomeState {
       recordsPerPage: recordsPerPage ?? this.recordsPerPage,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: errorMessage ?? this.errorMessage,
+      transferError: transferError ?? this.transferError,
       scenes: scenes ?? this.scenes,
       inspectionRecords: inspectionRecords ?? this.inspectionRecords,
     );
   }
 
   int get totalPages {
-    return inspectionRecords.isEmpty 
-        ? 0 
+    return inspectionRecords.isEmpty
+        ? 0
         : (inspectionRecords.length / recordsPerPage).ceil();
   }
 }
@@ -79,7 +84,7 @@ class HomeState {
 class HomeViewModel extends StateNotifier<HomeState> {
   final SceneService _sceneService;
   final RecordService _recordService;
-  final UsbTransferService _usbTransferService;
+  final USBTransferService _usbTransferService;
 
   HomeViewModel(this._sceneService, this._recordService, this._usbTransferService) : super(const HomeState()) {
     _initializeData();
@@ -164,21 +169,21 @@ class HomeViewModel extends StateNotifier<HomeState> {
       // Request necessary permissions first
       final permissionsGranted = await _usbTransferService.requestUsbPermissions();
       if (!permissionsGranted) {
-        state = state.copyWith(errorMessage: '未获得必要的权限进行USB传输，请在设置中授权');
+        state = state.copyWith(transferError: TransferErrorType.permissionDenied);
         return false;
       }
 
       // Check if USB device is connected
       final isDeviceConnected = await _usbTransferService.isUsbDeviceConnected();
       if (!isDeviceConnected) {
-        state = state.copyWith(errorMessage: '未检测到USB设备，请连接Windows设备');
+        state = state.copyWith(transferError: TransferErrorType.deviceNotConnected);
         return false;
       }
 
       // Get available transfer paths
       final transferPaths = await _usbTransferService.getAvailableTransferPaths();
       if (transferPaths.isEmpty) {
-        state = state.copyWith(errorMessage: '未找到可用的USB传输路径');
+        state = state.copyWith(transferError: TransferErrorType.pathNotAvailable);
         return false;
       }
 
@@ -191,8 +196,9 @@ class HomeViewModel extends StateNotifier<HomeState> {
           : state.scenes;
 
       // Prepare the transfer package to show progress
+      // ignore: unused_local_variable
       final transferPackage = await _usbTransferService.prepareTransferPackage(scenesToTransfer);
-      
+
       // Perform the actual transfer
       final success = await _usbTransferService.transferToWindows(
         scenes: scenesToTransfer,
@@ -222,8 +228,11 @@ class HomeViewModel extends StateNotifier<HomeState> {
           return scene;
         }).toList();
 
-        // Update the state with transferred scenes
-        state = state.copyWith(scenes: updatedScenes);
+        // Update the state with transferred scenes and clear any transfer errors
+        state = state.copyWith(
+          scenes: updatedScenes,
+          transferError: null, // Clear transfer error on success
+        );
 
         // Add a record of the successful transfer
         final transferRecord = InspectionRecord(
@@ -234,25 +243,25 @@ class HomeViewModel extends StateNotifier<HomeState> {
           status: '传输成功',
         );
         await addInspectionRecord(transferRecord);
-        
-        // Clear error message if transfer was successful
-        if (state.errorMessage?.contains('传输') == true) {
-          state = state.copyWith(errorMessage: null);
-        }
-        
+
         return true;
       } else {
-        state = state.copyWith(errorMessage: 'USB传输失败');
+        state = state.copyWith(transferError: TransferErrorType.transferFailed);
         return false;
       }
-    } catch (e, stackTrace) {
-      state = state.copyWith(errorMessage: 'USB传输过程中发生错误: $e');
+    } catch (e) {
+      final errorType = TransferErrorType.fromException(e);
+      state = state.copyWith(transferError: errorType);
       return false;
     }
   }
 
   void clearError() {
     state = state.copyWith(errorMessage: null);
+  }
+
+  void clearTransferError() {
+    state = state.copyWith(transferError: null);
   }
 
   Future<void> refreshData() async {

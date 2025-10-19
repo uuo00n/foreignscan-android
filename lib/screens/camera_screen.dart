@@ -48,9 +48,19 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   Future<void> _takePicture() async {
     try {
-      final imagePath = await ref.read(cameraControllerProvider.notifier).takePicture();
-      if (mounted && imagePath != null) {
-        Navigator.pop(context, imagePath);
+      // 使用新的拍照方法，直接保存到共享目录
+      final sharedPath = await ref.read(cameraControllerProvider.notifier).takePictureAndSaveToShared();
+      if (mounted && sharedPath != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('拍照成功！图片已保存到共享目录'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        // 延迟返回，让用户看到成功提示
+        await Future.delayed(Duration(seconds: 1));
+        Navigator.pop(context, sharedPath);
       }
     } catch (e) {
       if (mounted) {
