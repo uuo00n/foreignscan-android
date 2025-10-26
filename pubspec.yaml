@@ -49,6 +49,7 @@ dependencies:
   # Network
   dio: ^5.7.0
   connectivity_plus: ^6.1.0
+  http: ^1.2.2
   
   # Utilities
   path: ^1.9.0
@@ -71,6 +72,7 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  network_info_plus: ^7.0.0
 
 dev_dependencies:
   flutter_test:

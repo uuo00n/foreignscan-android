@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/models/inspection_record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
+import 'package:foreignscan/core/services/wifi_communication_service.dart';
 
 final recordServiceProvider = Provider<RecordService>((ref) {
   return RecordService(ref.watch(sharedPreferencesProvider.future));
