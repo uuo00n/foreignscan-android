@@ -3,6 +3,7 @@ import 'package:foreignscan/config/app_constants.dart';
 import 'package:foreignscan/screens/home_page.dart';
 import 'package:foreignscan/screens/camera_screen.dart';
 import 'package:foreignscan/screens/detection_result_screen.dart';
+import 'package:foreignscan/screens/image_upload_screen.dart';
 
 class DetectionResultArguments {
   final String imagePath;
@@ -43,6 +44,19 @@ class AppRouter {
           );
         }
         return _errorRoute(settings);
+        
+      case '/image-upload':
+        if (args is Map<String, dynamic>) {
+          final imagePath = args['imagePath'] as String?;
+          return MaterialPageRoute(
+            builder: (_) => ImageUploadScreen(imagePath: imagePath),
+            settings: settings,
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => const ImageUploadScreen(),
+          settings: settings,
+        );
         
       default:
         return _errorRoute(settings);

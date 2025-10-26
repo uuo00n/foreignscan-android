@@ -121,7 +121,7 @@ class WiFiCommunicationService {
     }
   }
 
-  /// Upload image file to Windows
+  /// Upload image file to server
   Future<bool> uploadImage(String imagePath, String recordId) async {
     try {
       // Check if file exists
@@ -148,6 +148,10 @@ class WiFiCommunicationService {
           sendTimeout: Duration(seconds: 30), // Longer timeout for file upload
           receiveTimeout: Duration(seconds: 30),
         ),
+        onSendProgress: (sent, total) {
+          final progress = (sent / total * 100).toStringAsFixed(2);
+          _logger.d('Upload progress: $progress%');
+        },
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -160,6 +164,51 @@ class WiFiCommunicationService {
     } catch (e) {
       _logger.e('Error uploading image: $e');
       return false;
+    }
+  }
+  
+  /// Upload image directly from camera
+  Future<Map<String, dynamic>?> uploadImageFromCamera(String imagePath) async {
+    try {
+      // Check if file exists
+      final file = File(imagePath);
+      if (!await file.exists()) {
+        _logger.e('Image file does not exist: $imagePath');
+        return null;
+      }
+
+      // Create multipart request
+      final formData = FormData.fromMap({
+        'image': await MultipartFile.fromFile(
+          imagePath,
+          filename: 'camera_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        ),
+      });
+
+      final response = await _dio.post(
+        'http://$_serverIP:$_port/api/upload-image',
+        data: formData,
+        options: Options(
+          contentType: 'multipart/form-data',
+          sendTimeout: Duration(seconds: 30),
+          receiveTimeout: Duration(seconds: 30),
+        ),
+        onSendProgress: (sent, total) {
+          final progress = (sent / total * 100).toStringAsFixed(2);
+          _logger.d('Upload progress: $progress%');
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _logger.i('Camera image uploaded successfully');
+        return response.data;
+      } else {
+        _logger.w('Failed to upload camera image: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      _logger.e('Error uploading camera image: $e');
+      return null;
     }
   }
 

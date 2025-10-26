@@ -48,19 +48,37 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   Future<void> _takePicture() async {
     try {
-      // 使用新的拍照方法，直接保存到共享目录
-      final sharedPath = await ref.read(cameraControllerProvider.notifier).takePictureAndSaveToShared();
-      if (mounted && sharedPath != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('拍照成功！图片已保存到共享目录'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+      final imagePath = await ref.read(cameraControllerProvider.notifier).takePicture();
+      if (mounted && imagePath != null) {
+        // 显示操作选择对话框
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('照片已拍摄'),
+            content: const Text('您想要如何处理这张照片？'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // 关闭对话框
+                  Navigator.pop(context, imagePath); // 返回原始行为
+                },
+                child: const Text('本地处理'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // 关闭对话框
+                  // 导航到图片上传页面
+                  Navigator.pushNamed(
+                    context,
+                    '/image-upload',
+                    arguments: {'imagePath': imagePath},
+                  );
+                },
+                child: const Text('通过WiFi上传'),
+              ),
+            ],
           ),
         );
-        // 延迟返回，让用户看到成功提示
-        await Future.delayed(Duration(seconds: 1));
-        Navigator.pop(context, sharedPath);
       }
     } catch (e) {
       if (mounted) {
