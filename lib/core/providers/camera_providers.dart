@@ -48,6 +48,12 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
     try {
       state = const AsyncValue.loading();
       
+      // 先释放旧的相机资源
+      if (_currentController != null) {
+        await _currentController!.dispose();
+        _currentController = null;
+      }
+      
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
         state = const AsyncValue.error('没有可用的相机', StackTrace.empty);
@@ -57,17 +63,39 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
       final selectedCameraIndex = _ref.read(selectedCameraProvider);
       final camera = cameras[selectedCameraIndex.clamp(0, cameras.length - 1)];
       
+      // 添加延迟，确保旧相机资源完全释放
+      await Future.delayed(const Duration(milliseconds: 300));
+      
       _currentController = CameraController(
         camera,
         ResolutionPreset.high,
         enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.yuv420, // Better compatibility with Impeller
+        imageFormatGroup: ImageFormatGroup.jpeg,
       );
 
-      await _currentController!.initialize();
-      state = AsyncValue.data(_currentController);
+      // 使用超时处理初始化
+      bool initialized = false;
+      try {
+        await _currentController!.initialize().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            throw Exception('相机初始化超时');
+          },
+        );
+        initialized = true;
+      } catch (initError) {
+        _ref.read(loggerProvider).e('相机初始化失败', error: initError);
+        if (_currentController != null) {
+          await _currentController!.dispose();
+          _currentController = null;
+        }
+        throw initError;
+      }
       
-      _ref.read(loggerProvider).i('相机初始化成功: ${camera.name}');
+      if (initialized && _currentController != null) {
+        state = AsyncValue.data(_currentController);
+        _ref.read(loggerProvider).i('相机初始化成功: ${camera.name}');
+      }
     } catch (e, stackTrace) {
       state = AsyncValue.error(e, stackTrace);
       _ref.read(loggerProvider).e('相机初始化失败', error: e, stackTrace: stackTrace);
@@ -103,43 +131,11 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
         throw Exception('正在拍照中');
       }
 
-      // Ensure preview is ready before taking picture
-      if (!controller.value.isPreviewPaused) {
-        await controller.lockCaptureOrientation();
-      }
-
       final image = await controller.takePicture();
-      await controller.unlockCaptureOrientation();
-
       _ref.read(loggerProvider).i('拍照成功: ${image.path}');
       return image.path;
     } catch (e, stackTrace) {
       _ref.read(loggerProvider).e('拍照失败', error: e, stackTrace: stackTrace);
-      rethrow;
-    }
-  }
-
-  Future<String?> takePictureAndSaveToShared() async {
-    try {
-      final imagePath = await takePicture();
-      if (imagePath == null) {
-        return null;
-      }
-
-      // 请求存储权限
-      final cameraService = _ref.read(cameraServiceProvider);
-      final hasStoragePermission = await cameraService.requestStoragePermission();
-      if (!hasStoragePermission) {
-        throw Exception('存储权限被拒绝，无法保存图片');
-      }
-
-      // 保存到共享目录
-      final sharedPath = await cameraService.saveImageToSharedDirectory(imagePath);
-
-      _ref.read(loggerProvider).i('图片已保存到共享目录: $sharedPath');
-      return sharedPath;
-    } catch (e, stackTrace) {
-      _ref.read(loggerProvider).e('拍照并保存到共享目录失败', error: e, stackTrace: stackTrace);
       rethrow;
     }
   }
@@ -150,9 +146,7 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
 
   Future<void> disposeCamera() async {
     if (_currentController != null) {
-      if (_currentController!.value.isInitialized) {
-        await _currentController!.dispose();
-      }
+      await _currentController!.dispose();
       _currentController = null;
       state = const AsyncValue.data(null);
     }

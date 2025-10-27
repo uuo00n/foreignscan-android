@@ -20,26 +20,34 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 
   Future<void> _checkPermissionsAndInitialize() async {
-    // 检查相机权限
-    final hasPermission = await ref
-        .read(cameraServiceProvider)
-        .requestCameraPermission();
+    try {
+      // 检查相机权限
+      final hasPermission = await ref
+          .read(cameraServiceProvider)
+          .requestCameraPermission();
 
-    if (!hasPermission) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('需要相机权限才能拍照'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
+      if (!mounted) return; // 检查widget是否已被销毁
+
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('需要相机权限才能拍照'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
       }
-      return;
-    }
 
-    // 初始化相机
-    ref.read(cameraControllerProvider.notifier).refreshCamera();
+      // 初始化相机
+      if (mounted) {
+        ref.read(cameraControllerProvider.notifier).refreshCamera();
+      }
+    } catch (e) {
+      debugPrint('初始化相机错误: $e');
+    }
   }
 
   @override

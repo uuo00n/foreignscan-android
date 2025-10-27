@@ -70,7 +70,11 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
         int.tryParse(_portController.text) ?? 8080
       );
       
-      final result = await wifiService.uploadImageFromCamera(widget.imagePath!);
+      // 在单独的上传页面，我们不知道具体的场景ID，使用"upload"作为标识
+      final result = await wifiService.uploadImageFromCamera(
+        widget.imagePath!,
+        sceneId: "upload",
+      );
       
       if (result != null && result['success'] == true) {
         setState(() {

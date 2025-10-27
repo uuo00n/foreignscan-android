@@ -11,7 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 
 class WiFiCommunicationService {
-  static const String _defaultServerIP = '192.168.1.100'; // Default Windows IP
+  static const String _defaultServerIP = '172.20.10.3'; // Default Windows IP
   static const int _defaultPort = 8080; // Default port
   static const Duration _connectionTimeout = Duration(seconds: 10);
 
@@ -168,7 +168,7 @@ class WiFiCommunicationService {
   }
   
   /// Upload image directly from camera
-  Future<Map<String, dynamic>?> uploadImageFromCamera(String imagePath) async {
+  Future<Map<String, dynamic>?> uploadImageFromCamera(String imagePath, {String? sceneId}) async {
     try {
       // Check if file exists
       final file = File(imagePath);
@@ -177,21 +177,35 @@ class WiFiCommunicationService {
         return null;
       }
 
+      // 生成年月日格式
+      final now = DateTime.now();
+      final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+      
+      // 生成文件名：年月日+场景编号
+      final fileName = sceneId != null 
+          ? '${dateStr}_${sceneId}.jpg' 
+          : '${dateStr}_unknown.jpg';
+
       // Create multipart request
       final formData = FormData.fromMap({
         'image': await MultipartFile.fromFile(
           imagePath,
-          filename: 'camera_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          filename: fileName,
         ),
+        'customFileName': fileName, // 添加自定义文件名作为额外参数
       });
 
+      // 将文件名添加到URL中作为查询参数
       final response = await _dio.post(
-        'http://$_serverIP:$_port/api/upload-image',
+        'http://$_serverIP:$_port/api/upload-image?filename=$fileName',
         data: formData,
         options: Options(
           contentType: 'multipart/form-data',
           sendTimeout: Duration(seconds: 30),
           receiveTimeout: Duration(seconds: 30),
+          headers: {
+            'X-Custom-Filename': fileName, // 添加自定义文件名作为请求头
+          },
         ),
         onSendProgress: (sent, total) {
           final progress = (sent / total * 100).toStringAsFixed(2);

@@ -116,7 +116,10 @@ class HomePage extends ConsumerWidget {
     
     try {
       final wifiService = ref.read(wifiServiceProvider);
-      final result = await wifiService.uploadImageFromCamera(selectedScene.capturedImage!);
+      final result = await wifiService.uploadImageFromCamera(
+        selectedScene.capturedImage!,
+        sceneId: selectedScene.id,
+      );
       
       if (context.mounted) {
         Navigator.pop(context); // 关闭进度对话框
@@ -325,7 +328,10 @@ class HomePage extends ConsumerWidget {
     try {
       // 使用WiFi服务上传图片
       final wifiService = ref.read(wifiServiceProvider);
-      final result = await wifiService.uploadImageFromCamera(selectedScene.capturedImage!);
+      final result = await wifiService.uploadImageFromCamera(
+        selectedScene.capturedImage!,
+        sceneId: selectedScene.id,
+      );
       
       if (context.mounted) {
         Navigator.pop(context); // 关闭进度对话框
