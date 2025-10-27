@@ -10,6 +10,7 @@ import 'package:foreignscan/widgets/records_section.dart';
 import 'package:foreignscan/models/inspection_record.dart';
 import 'package:foreignscan/screens/camera_screen.dart';
 import 'package:foreignscan/core/widgets/app_bar_actions.dart';
+import 'package:foreignscan/widgets/app_drawer.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -40,8 +41,14 @@ class HomePage extends ConsumerWidget {
       }
     });
 
+    final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+    
     return Scaffold(
-      appBar: _buildAppBar(context, ref),
+      key: _scaffoldKey,
+      appBar: _buildAppBar(context, ref, _scaffoldKey),
+      drawer: AppDrawer(
+        onUploadPressed: () => _uploadLatestImage(context, ref),
+      ),
       body: homeState.isLoading 
           ? const LoadingWidget(message: '正在加载数据...')
           : homeState.errorMessage != null
@@ -53,12 +60,12 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, WidgetRef ref) {
+  PreferredSizeWidget _buildAppBar(BuildContext context, WidgetRef ref, GlobalKey<ScaffoldState> scaffoldKey) {
     return AppBar(
       leading: IconButton(
         icon: const Icon(Icons.menu),
         onPressed: () {
-          // TODO: 打开抽屉菜单
+          scaffoldKey.currentState?.openDrawer();
         },
       ),
       title: const Text('智能防异物检测系统'),
@@ -74,6 +81,73 @@ class HomePage extends ConsumerWidget {
         ),
       ],
     );
+  }
+  
+  Future<void> _uploadLatestImage(BuildContext context, WidgetRef ref) async {
+    final homeState = ref.read(homeViewModelProvider);
+    final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
+    
+    if (selectedScene.capturedImage == null || selectedScene.capturedImage!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('没有可上传的图片，请先拍摄照片'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    // 显示上传进度对话框
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        title: Text('正在上传'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('正在通过WiFi上传图片，请稍候...'),
+          ],
+        ),
+      ),
+    );
+    
+    try {
+      final wifiService = ref.read(wifiServiceProvider);
+      final result = await wifiService.uploadImageFromCamera(selectedScene.capturedImage!);
+      
+      if (context.mounted) {
+        Navigator.pop(context); // 关闭进度对话框
+        
+        if (result != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('图片上传成功'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('图片上传失败，请检查网络连接和服务器设置'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // 关闭进度对话框
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('上传出错: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildBody(
@@ -231,38 +305,53 @@ class HomePage extends ConsumerWidget {
       return;
     }
 
-    try {
-      // 显示加载状态
-      final snackBar = SnackBar(
-        content: Row(
+    // 显示上传进度对话框
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        title: Text('正在传输'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(strokeWidth: 2),
-            const SizedBox(width: 12),
-            Text('正在通过USB传输 "${selectedScene.name}" ...'),
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('正在通过WiFi传输图片，请稍候...'),
           ],
         ),
-        duration: const Duration(seconds: 10), // Increased duration to allow for actual transfer
-      );
+      ),
+    );
+
+    try {
+      // 使用WiFi服务上传图片
+      final wifiService = ref.read(wifiServiceProvider);
+      final result = await wifiService.uploadImageFromCamera(selectedScene.capturedImage!);
       
-      ScaffoldMessenger.of(context).showSnackBar(snackBar);
-
-      // Perform USB transfer for the specific scene
-      final success = await homeViewModel.transferViaUsb(specificSceneId: selectedScene.id);
-
       if (context.mounted) {
-        if (success) {
+        Navigator.pop(context); // 关闭进度对话框
+        
+        if (result != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('USB传输成功: ${selectedScene.name}'),
+            const SnackBar(
+              content: Text('传输成功'),
               backgroundColor: Colors.green,
             ),
           );
+          
+          // 添加检测记录
+          final newRecord = InspectionRecord(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            sceneName: selectedScene.name,
+            imagePath: selectedScene.capturedImage!,
+            timestamp: DateTime.now(),
+            status: '已确认',
+          );
+
+          await homeViewModel.addInspectionRecord(newRecord);
         } else {
-          // The error message should already be in the state
-          final error = ref.read(homeViewModelProvider).errorMessage;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('USB传输失败: ${error ?? "未知错误"}'),
+            const SnackBar(
+              content: Text('传输失败，请检查网络连接和服务器设置'),
               backgroundColor: Colors.red,
             ),
           );
@@ -270,9 +359,10 @@ class HomePage extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
+        Navigator.pop(context); // 关闭进度对话框
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('传输过程中出现异常: $e'),
+            content: Text('传输出错: $e'),
             backgroundColor: Colors.red,
           ),
         );

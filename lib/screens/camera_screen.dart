@@ -21,8 +21,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   Future<void> _checkPermissionsAndInitialize() async {
     // 检查相机权限
-    final hasPermission = await ref.read(cameraServiceProvider).requestCameraPermission();
-    
+    final hasPermission = await ref
+        .read(cameraServiceProvider)
+        .requestCameraPermission();
+
     if (!hasPermission) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -48,45 +50,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   Future<void> _takePicture() async {
     try {
-      final imagePath = await ref.read(cameraControllerProvider.notifier).takePicture();
+      final imagePath = await ref
+          .read(cameraControllerProvider.notifier)
+          .takePicture();
       if (mounted && imagePath != null) {
-        // 显示操作选择对话框
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('照片已拍摄'),
-            content: const Text('您想要如何处理这张照片？'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // 关闭对话框
-                  Navigator.pop(context, imagePath); // 返回原始行为
-                },
-                child: const Text('本地处理'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // 关闭对话框
-                  // 导航到图片上传页面
-                  Navigator.pushNamed(
-                    context,
-                    '/image-upload',
-                    arguments: {'imagePath': imagePath},
-                  );
-                },
-                child: const Text('通过WiFi上传'),
-              ),
-            ],
-          ),
-        );
+        // 直接返回拍摄的照片路径
+        Navigator.pop(context, imagePath);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('拍照失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('拍照失败: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -98,7 +72,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
     final currentIndex = ref.read(selectedCameraProvider);
     final nextIndex = (currentIndex + 1) % cameras.length;
-    
+
     ref.read(cameraControllerProvider.notifier).switchCamera(nextIndex);
   }
 
@@ -131,20 +105,20 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         ],
       ),
       body: cameraState.when(
-        loading: () => const LoadingWidget(
-          message: '正在初始化相机...',
-          color: Colors.white,
-        ),
+        loading: () =>
+            const LoadingWidget(message: '正在初始化相机...', color: Colors.white),
         error: (error, stackTrace) => ErrorWidgetCustom(
           message: '相机初始化失败: $error',
-          onRetry: () => ref.read(cameraControllerProvider.notifier).refreshCamera(),
+          onRetry: () =>
+              ref.read(cameraControllerProvider.notifier).refreshCamera(),
           icon: Icons.camera_alt,
         ),
         data: (controller) {
           if (controller == null) {
             return ErrorWidgetCustom(
               message: '无法访问相机设备',
-              onRetry: () => ref.read(cameraControllerProvider.notifier).refreshCamera(),
+              onRetry: () =>
+                  ref.read(cameraControllerProvider.notifier).refreshCamera(),
               icon: Icons.camera_alt,
             );
           }
@@ -152,10 +126,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
           return Stack(
             children: [
               // 相机预览
-              Positioned.fill(
-                child: CameraPreview(controller),
-              ),
-              
+              Positioned.fill(child: CameraPreview(controller)),
+
               // 拍照按钮
               Positioned(
                 bottom: 30,
@@ -170,14 +142,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                   ),
                 ),
               ),
-              
+
               // 返回按钮
               Positioned(
                 top: 40,
                 left: 16,
                 child: SafeArea(
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),

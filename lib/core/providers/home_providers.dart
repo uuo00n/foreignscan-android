@@ -1,19 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/models/inspection_record.dart';
-import 'package:foreignscan/core/models/transfer_error.dart';
 import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/record_service.dart';
-import 'package:foreignscan/services/usb_transfer_service.dart';
-
-import 'app_providers.dart';
+import 'package:foreignscan/core/services/wifi_communication_service.dart';
+import 'package:logger/logger.dart';
 
 // Home页面状态提供者
 final homeViewModelProvider = StateNotifierProvider<HomeViewModel, HomeState>((ref) {
   return HomeViewModel(
     ref.read(sceneServiceProvider),
     ref.read(recordServiceProvider),
-    ref.read(usbTransferServiceProvider),
   );
 });
 
@@ -29,6 +26,16 @@ final recordsProvider = FutureProvider<List<InspectionRecord>>((ref) async {
   return await service.getRecords();
 });
 
+// Logger提供者
+final loggerProvider = Provider<Logger>((ref) {
+  return Logger();
+});
+
+// WiFi通信服务提供者
+final wifiServiceProvider = Provider<WiFiCommunicationService>((ref) {
+  return WiFiCommunicationService(ref.read(loggerProvider));
+});
+
 // Home页面状态
 class HomeState {
   final int selectedSceneIndex;
@@ -36,7 +43,6 @@ class HomeState {
   final int recordsPerPage;
   final bool isLoading;
   final String? errorMessage;
-  final TransferErrorType? transferError;
   final List<SceneData> scenes;
   final List<InspectionRecord> inspectionRecords;
 
@@ -46,7 +52,6 @@ class HomeState {
     this.recordsPerPage = 4,
     this.isLoading = false,
     this.errorMessage,
-    this.transferError,
     this.scenes = const [],
     this.inspectionRecords = const [],
   });
@@ -57,7 +62,6 @@ class HomeState {
     int? recordsPerPage,
     bool? isLoading,
     String? errorMessage,
-    TransferErrorType? transferError,
     List<SceneData>? scenes,
     List<InspectionRecord>? inspectionRecords,
   }) {
@@ -67,15 +71,14 @@ class HomeState {
       recordsPerPage: recordsPerPage ?? this.recordsPerPage,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: errorMessage ?? this.errorMessage,
-      transferError: transferError ?? this.transferError,
       scenes: scenes ?? this.scenes,
       inspectionRecords: inspectionRecords ?? this.inspectionRecords,
     );
   }
 
   int get totalPages {
-    return inspectionRecords.isEmpty
-        ? 0
+    return inspectionRecords.isEmpty 
+        ? 0 
         : (inspectionRecords.length / recordsPerPage).ceil();
   }
 }
@@ -84,9 +87,8 @@ class HomeState {
 class HomeViewModel extends StateNotifier<HomeState> {
   final SceneService _sceneService;
   final RecordService _recordService;
-  final USBTransferService _usbTransferService;
 
-  HomeViewModel(this._sceneService, this._recordService, this._usbTransferService) : super(const HomeState()) {
+  HomeViewModel(this._sceneService, this._recordService) : super(const HomeState()) {
     _initializeData();
   }
 
@@ -145,12 +147,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
     try {
       final updatedScenes = state.scenes.map((scene) {
         if (scene.id == sceneId) {
-          return scene.copyWith(
-            capturedImage: imagePath,
-            captureTime: DateTime.now(), // Set the capture time to now
-            isTransferred: false, // Mark as not transferred since new image was captured
-            transferTime: null, // Clear transfer time
-          );
+          return scene.copyWith(capturedImage: imagePath);
         }
         return scene;
       }).toList();
@@ -163,105 +160,8 @@ class HomeViewModel extends StateNotifier<HomeState> {
     }
   }
 
-  /// Transfers captured images and timestamps via USB to Windows
-  Future<bool> transferViaUsb({String? specificSceneId}) async {
-    try {
-      // Request necessary permissions first
-      final permissionsGranted = await _usbTransferService.requestUsbPermissions();
-      if (!permissionsGranted) {
-        state = state.copyWith(transferError: TransferErrorType.permissionDenied);
-        return false;
-      }
-
-      // Check if USB device is connected
-      final isDeviceConnected = await _usbTransferService.isUsbDeviceConnected();
-      if (!isDeviceConnected) {
-        state = state.copyWith(transferError: TransferErrorType.deviceNotConnected);
-        return false;
-      }
-
-      // Get available transfer paths
-      final transferPaths = await _usbTransferService.getAvailableTransferPaths();
-      if (transferPaths.isEmpty) {
-        state = state.copyWith(transferError: TransferErrorType.pathNotAvailable);
-        return false;
-      }
-
-      // Select the first available path (in real implementation, user might choose)
-      final targetPath = transferPaths.first;
-
-      // Filter scenes based on whether we're transferring all scenes or a specific one
-      final scenesToTransfer = specificSceneId != null
-          ? state.scenes.where((scene) => scene.id == specificSceneId).toList()
-          : state.scenes;
-
-      // Prepare the transfer package to show progress
-      // ignore: unused_local_variable
-      final transferPackage = await _usbTransferService.prepareTransferPackage(scenesToTransfer);
-
-      // Perform the actual transfer
-      final success = await _usbTransferService.transferToWindows(
-        scenes: scenesToTransfer,
-        targetDirectory: targetPath,
-      );
-
-      if (success) {
-        // Update scenes to mark them as transferred
-        final updatedScenes = state.scenes.map((scene) {
-          if (specificSceneId != null) {
-            // Only update the specific scene
-            if (scene.id == specificSceneId) {
-              return scene.copyWith(
-                isTransferred: true,
-                transferTime: DateTime.now(),
-              );
-            }
-          } else {
-            // Update all scenes that have captured images
-            if (scene.capturedImage != null) {
-              return scene.copyWith(
-                isTransferred: true,
-                transferTime: DateTime.now(),
-              );
-            }
-          }
-          return scene;
-        }).toList();
-
-        // Update the state with transferred scenes and clear any transfer errors
-        state = state.copyWith(
-          scenes: updatedScenes,
-          transferError: null, // Clear transfer error on success
-        );
-
-        // Add a record of the successful transfer
-        final transferRecord = InspectionRecord(
-          id: 'transfer_${DateTime.now().millisecondsSinceEpoch}',
-          sceneName: specificSceneId != null ? '单场景传输' : '批量传输',
-          imagePath: '',
-          timestamp: DateTime.now(),
-          status: '传输成功',
-        );
-        await addInspectionRecord(transferRecord);
-
-        return true;
-      } else {
-        state = state.copyWith(transferError: TransferErrorType.transferFailed);
-        return false;
-      }
-    } catch (e) {
-      final errorType = TransferErrorType.fromException(e);
-      state = state.copyWith(transferError: errorType);
-      return false;
-    }
-  }
-
   void clearError() {
     state = state.copyWith(errorMessage: null);
-  }
-
-  void clearTransferError() {
-    state = state.copyWith(transferError: null);
   }
 
   Future<void> refreshData() async {
