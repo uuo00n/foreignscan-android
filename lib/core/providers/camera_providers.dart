@@ -45,56 +45,81 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
   }
 
   Future<void> _initializeCamera() async {
+    const int maxRetries = 3;
+    int retryCount = 0;
+    
     try {
-      state = const AsyncValue.loading();
-      
-      // 先释放旧的相机资源
-      if (_currentController != null) {
-        await _currentController!.dispose();
-        _currentController = null;
-      }
-      
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        state = const AsyncValue.error('没有可用的相机', StackTrace.empty);
-        return;
-      }
+      while (retryCount < maxRetries) {
+        try {
+          state = const AsyncValue.loading();
+          
+          // 先释放旧的相机资源
+          if (_currentController != null) {
+            await _currentController!.dispose();
+            _currentController = null;
+          }
+          
+          // 添加延迟，确保旧相机资源完全释放
+          await Future.delayed(const Duration(milliseconds: 500));
+          
+          final cameras = await availableCameras();
+          if (cameras.isEmpty) {
+            state = const AsyncValue.error('没有可用的相机', StackTrace.empty);
+            return;
+          }
 
-      final selectedCameraIndex = _ref.read(selectedCameraProvider);
-      final camera = cameras[selectedCameraIndex.clamp(0, cameras.length - 1)];
-      
-      // 添加延迟，确保旧相机资源完全释放
-      await Future.delayed(const Duration(milliseconds: 300));
-      
-      _currentController = CameraController(
-        camera,
-        ResolutionPreset.high,
-        enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
-      );
+          final selectedCameraIndex = _ref.read(selectedCameraProvider);
+          final camera = cameras[selectedCameraIndex.clamp(0, cameras.length - 1)];
+          
+          _currentController = CameraController(
+            camera,
+            ResolutionPreset.high,
+            enableAudio: false,
+            imageFormatGroup: ImageFormatGroup.jpeg,
+          );
 
-      // 使用超时处理初始化
-      bool initialized = false;
-      try {
-        await _currentController!.initialize().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () {
-            throw Exception('相机初始化超时');
-          },
-        );
-        initialized = true;
-      } catch (initError) {
-        _ref.read(loggerProvider).e('相机初始化失败', error: initError);
-        if (_currentController != null) {
-          await _currentController!.dispose();
-          _currentController = null;
+          // 使用超时处理初始化
+          bool initialized = false;
+          try {
+            await _currentController!.initialize().timeout(
+              const Duration(seconds: 8),
+              onTimeout: () {
+                throw Exception('相机初始化超时');
+              },
+            );
+            initialized = true;
+          } catch (initError) {
+            _ref.read(loggerProvider).e('相机初始化失败 (尝试 ${retryCount + 1}/$maxRetries)', error: initError);
+            if (_currentController != null) {
+              await _currentController!.dispose();
+              _currentController = null;
+            }
+            
+            // 如果是最后一次尝试，则抛出错误
+            if (retryCount == maxRetries - 1) {
+              throw initError;
+            }
+            
+            // 否则继续重试
+            retryCount++;
+            continue;
+          }
+          
+          if (initialized && _currentController != null) {
+            state = AsyncValue.data(_currentController);
+            _ref.read(loggerProvider).i('相机初始化成功: ${camera.name}');
+            return; // 成功初始化，退出循环
+          }
+        } catch (e, stackTrace) {
+          if (retryCount == maxRetries - 1) {
+            // 最后一次尝试失败，设置错误状态
+            state = AsyncValue.error(e, stackTrace);
+            _ref.read(loggerProvider).e('相机初始化失败，已达到最大重试次数', error: e);
+            return;
+          }
+          
+          retryCount++;
         }
-        throw initError;
-      }
-      
-      if (initialized && _currentController != null) {
-        state = AsyncValue.data(_currentController);
-        _ref.read(loggerProvider).i('相机初始化成功: ${camera.name}');
       }
     } catch (e, stackTrace) {
       state = AsyncValue.error(e, stackTrace);

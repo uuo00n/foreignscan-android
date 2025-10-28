@@ -78,10 +78,39 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     final cameras = await ref.read(availableCamerasProvider.future);
     if (cameras.length <= 1) return;
 
+    // 显示切换中提示
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('正在切换相机...'),
+          duration: Duration(seconds: 1),
+          backgroundColor: Colors.blue,
+        ),
+      );
+    }
+
     final currentIndex = ref.read(selectedCameraProvider);
     final nextIndex = (currentIndex + 1) % cameras.length;
 
-    ref.read(cameraControllerProvider.notifier).switchCamera(nextIndex);
+    // 强制重新初始化相机
+    await ref.read(cameraControllerProvider.notifier).switchCamera(nextIndex);
+    
+    // 如果相机初始化失败，尝试再次切换
+    final cameraState = ref.read(cameraControllerProvider);
+    if (cameraState is AsyncError) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('相机切换失败，正在重试...'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      
+      // 短暂延迟后再次尝试
+      await Future.delayed(const Duration(milliseconds: 500));
+      await ref.read(cameraControllerProvider.notifier).refreshCamera();
+    }
   }
 
   @override
