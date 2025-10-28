@@ -23,40 +23,8 @@ class RecordService {
         return InspectionRecord.fromJsonList(recordsJson);
       }
       
-      // 默认检测记录
-      final defaultRecords = [
-        InspectionRecord(
-          id: '001',
-          sceneName: '管道闸口',
-          imagePath: '',
-          timestamp: DateTime(2025, 7, 11, 14, 30),
-          status: '已确认',
-        ),
-        InspectionRecord(
-          id: '002',
-          sceneName: '主承轴区域',
-          imagePath: '',
-          timestamp: DateTime(2025, 7, 11, 14, 30),
-          status: '已确认',
-        ),
-        InspectionRecord(
-          id: '003',
-          sceneName: '冷却系统出口',
-          imagePath: '',
-          timestamp: DateTime(2025, 7, 11, 14, 30),
-          status: '已确认',
-        ),
-        InspectionRecord(
-          id: '004',
-          sceneName: '传动轴检测点',
-          imagePath: '',
-          timestamp: DateTime(2025, 7, 11, 14, 30),
-          status: '已确认',
-        ),
-      ];
-      
-      await saveRecords(defaultRecords);
-      return defaultRecords;
+      // 返回空列表，不再使用默认记录
+      return [];
     } catch (e) {
       throw Exception('获取检测记录失败: $e');
     }

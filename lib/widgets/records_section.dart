@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/inspection_record.dart';
+import 'dart:io';
 
 class RecordsSection extends StatelessWidget {
   final List<InspectionRecord> records;
@@ -29,53 +30,49 @@ class RecordsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '拍摄记录',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '拍摄记录',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              if (records.isNotEmpty)
+                Text(
+                  '左右滑动查看更多',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+            ],
           ),
           SizedBox(height: 12),
           Expanded(
             child: records.isEmpty
                 ? Center(
-              child: Text(
-                '暂无拍摄记录',
-                style: TextStyle(color: Colors.grey, fontSize: 16),
-              ),
-            )
+                    child: Text(
+                      '暂无拍摄记录',
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                  )
                 : _buildRecordsList(),
           ),
-          if (records.isNotEmpty) ...[
-            SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildPageButton(
-                  Icons.chevron_left,
-                  currentPage > 0 ? onPreviousPage : null,
-                ),
-                SizedBox(width: 16),
-                _buildPageButton(
-                  Icons.chevron_right,
-                  currentPage < totalPages - 1 ? onNextPage : null,
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );
   }
 
   Widget _buildRecordsList() {
-    final startIndex = currentPage * recordsPerPage;
-    final endIndex = (startIndex + recordsPerPage).clamp(0, records.length);
-    final currentRecords = records.sublist(startIndex, endIndex);
-
-    return ListView.builder(
-      scrollDirection: Axis.horizontal,
-      itemCount: currentRecords.length,
+    return PageView.builder(
+      controller: PageController(
+        viewportFraction: 0.35,
+        initialPage: currentPage,
+      ),
+      padEnds: false,
+      // 移除onPageChanged回调，避免滑动时的状态更新导致卡顿
+      // PageView自身会处理页面切换，不需要额外的状态更新
+      
+      itemCount: records.length,
       itemBuilder: (context, index) {
-        return _buildRecordCard(currentRecords[index]);
+        return _buildRecordCard(records[index]);
       },
     );
   }
@@ -84,12 +81,18 @@ class RecordsSection extends StatelessWidget {
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
     return Container(
-      width: 250,
-      margin: EdgeInsets.only(right: 16),
+      margin: EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[300]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,13 +103,32 @@ class RecordsSection extends StatelessWidget {
                 color: Colors.grey[800],
                 borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
               ),
-              child: Center(
-                child: Icon(
-                  Icons.image,
-                  size: 48,
-                  color: Colors.orange,
-                ),
-              ),
+              child: record.imagePath.isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                    child: Image.file(
+                      File(record.imagePath),
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Icon(
+                            Icons.broken_image,
+                            size: 48,
+                            color: Colors.orange,
+                          ),
+                        );
+                      },
+                    ),
+                  )
+                : Center(
+                    child: Icon(
+                      Icons.image,
+                      size: 48,
+                      color: Colors.orange,
+                    ),
+                  ),
             ),
           ),
           Padding(
