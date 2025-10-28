@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/providers/home_providers.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
@@ -43,20 +44,29 @@ class HomePage extends ConsumerWidget {
 
     final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
     
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: _buildAppBar(context, ref, _scaffoldKey),
-      drawer: AppDrawer(
-        onUploadPressed: () => _uploadLatestImage(context, ref),
+    // 使用WillPopScope处理返回手势
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        // 显示退出确认对话框
+        _showExitConfirmDialog(context);
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        appBar: _buildAppBar(context, ref, _scaffoldKey),
+        drawer: AppDrawer(
+          onUploadPressed: () => _uploadLatestImage(context, ref),
+        ),
+        body: homeState.isLoading 
+            ? const LoadingWidget(message: '正在加载数据...')
+            : homeState.errorMessage != null
+                ? ErrorWidgetCustom(
+                    message: homeState.errorMessage!,
+                    onRetry: () => homeViewModel.refreshData(),
+                  )
+                : _buildBody(context, ref, homeState, homeViewModel),
       ),
-      body: homeState.isLoading 
-          ? const LoadingWidget(message: '正在加载数据...')
-          : homeState.errorMessage != null
-              ? ErrorWidgetCustom(
-                  message: homeState.errorMessage!,
-                  onRetry: () => homeViewModel.refreshData(),
-                )
-              : _buildBody(context, ref, homeState, homeViewModel),
     );
   }
 
@@ -83,6 +93,32 @@ class HomePage extends ConsumerWidget {
     );
   }
   
+  // 显示退出确认对话框
+  Future<void> _showExitConfirmDialog(BuildContext context) async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认退出'),
+        content: const Text('您确定要退出应用吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('退出'),
+          ),
+        ],
+      ),
+    ).then((value) {
+      if (value == true) {
+        // 如果用户确认退出，则使用SystemNavigator.pop()完全退出应用
+        SystemNavigator.pop();
+      }
+    });
+  }
+
   Future<void> _uploadLatestImage(BuildContext context, WidgetRef ref) async {
     final homeState = ref.read(homeViewModelProvider);
     final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
