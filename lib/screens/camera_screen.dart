@@ -163,6 +163,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         title: const Text('拍摄照片'),
         backgroundColor: Colors.black87,
         foregroundColor: Colors.white,
+        automaticallyImplyLeading: false, // 禁用自动添加的返回按钮
         actions: [
           camerasAsync.when(
             data: (cameras) {
@@ -243,23 +244,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                               
                               // 应用闪光灯设置
                               await controller.setFlashMode(_flashMode);
-                              
-                              // 显示提示
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      _flashMode == FlashMode.off
-                                          ? '闪光灯已关闭'
-                                          : (_flashMode == FlashMode.auto
-                                              ? '闪光灯模式：自动'
-                                              : '闪光灯已开启'),
-                                    ),
-                                    duration: const Duration(seconds: 1),
-                                    backgroundColor: Colors.black87,
-                                  ),
-                                );
-                              }
                             }
                           },
                           tooltip: '闪光灯控制',
