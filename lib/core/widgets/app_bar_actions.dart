@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 
 /// 统一的AppBar操作按钮组件
 class AppBarActions extends StatelessWidget {
@@ -28,7 +29,8 @@ class AppBarActions extends StatelessWidget {
               icon: const Icon(Icons.add, size: 18),
               label: const Text('新建检测'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.secondary,
+                // 中文注释：使用更协调的浅蓝（accentBlueLight）作为“新建检测”的背景色
+                backgroundColor: AppTheme.accentBlueLight,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
@@ -43,7 +45,8 @@ class AppBarActions extends StatelessWidget {
               icon: const Icon(Icons.analytics, size: 18),
               label: const Text('检测结果'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).primaryColor,
+                // 中文注释：使用靛蓝（accentIndigo）作为“检测结果”的背景色，避免与主色完全一致导致视觉层级混乱
+                backgroundColor: AppTheme.accentIndigo,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),

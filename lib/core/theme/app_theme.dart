@@ -7,6 +7,11 @@ class AppTheme {
   static const Color errorColor = Color(0xFFB00020);
   static const Color warningColor = Color(0xFFFF9800);
   static const Color successColor = Color(0xFF4CAF50);
+  // 中文注释：新增两种与主色蓝色（primaryColor）更为协调的点缀色
+  // 1) 浅蓝（Blue 300）：用于“新建检测”按钮，强调但不抢主色
+  static const Color accentBlueLight = Color.fromARGB(255, 75, 129, 173);
+  // 2) 靛蓝（Indigo 400）：用于“检测结果”按钮，层级更稳重
+  static const Color accentIndigo = Color(0xFF5C6BC0);
   
   static const Color backgroundLight = Color(0xFFF5F5F5);
   static const Color backgroundDark = Color(0xFF121212);
