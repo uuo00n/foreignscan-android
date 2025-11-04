@@ -78,8 +78,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
             .takePicture();
             
         // 中文注释：
-        // 拍照完成后，不再强制恢复为关闭，保持用户选择的闪光灯模式，提升一致性。
-        // 若需要拍完即关闭，可根据需求在此处恢复为 off。
+        // 需求变更：拍摄完成后自动关闭闪光灯，避免“常亮（torch）”持续点亮影响使用。
+        // 行为说明：无论当前是 auto/torch/off，拍完后都统一设置为 off，UI 同步更新。
+        try {
+          await controller.setFlashMode(FlashMode.off);
+        } catch (e) {
+          debugPrint('拍摄后关闭闪光灯失败: $e');
+        }
+        if (mounted) {
+          setState(() {
+            _flashMode = FlashMode.off;
+          });
+        }
         
         if (mounted && imagePath != null) {
           // 直接返回拍摄的照片路径
@@ -91,6 +101,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
             .read(cameraControllerProvider.notifier)
             .takePicture();
             
+        // 中文注释：
+        // 即便读取时控制器为 null，拍照底层仍可能成功，此处尝试关闭闪光灯（若控制器可用）。
+        final afterController = ref.read(cameraControllerProvider).value;
+        if (afterController != null) {
+          try {
+            await afterController.setFlashMode(FlashMode.off);
+          } catch (e) {
+            debugPrint('拍摄后关闭闪光灯失败(控制器空分支): $e');
+          }
+        }
+        if (mounted) {
+          setState(() {
+            _flashMode = FlashMode.off;
+          });
+        }
+        
         if (mounted && imagePath != null) {
           Navigator.pop(context, imagePath);
         }
