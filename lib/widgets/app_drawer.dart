@@ -6,6 +6,7 @@ import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:logger/logger.dart';
 import 'package:foreignscan/core/providers/app_info_providers.dart';
 import 'package:foreignscan/widgets/about_app_dialog.dart';
+import 'package:foreignscan/core/routes/app_router.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   final Function() onUploadPressed;
@@ -27,6 +28,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   bool _hasTested = false; // 中文注释：是否已进行过“测试连接”，用于控制右侧状态提示的显示
   String? _testStatusText; // 中文注释：测试连接的提示文案（成功/失败/输入缺失等）
   Map<String, dynamic>? _wifiInfo;
+  int _statusVersion = 0; // 中文注释：状态版本号，每次状态变更递增，确保 AnimatedSwitcher 的子组件 Key 唯一，避免重复 Key
+  bool _isAboutDialogShowing = false; // 中文注释：标记“关于”对话框是否正在显示，防止重复点击导致多次弹窗
 
   @override
   void initState() {
@@ -55,6 +58,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   }
 
   Future<void> _testConnection() async {
+    // 中文注释：防并发与防抖，若当前已在连接测试中，直接返回，避免多次快速点击导致并发和动画堆叠
+    if (_isConnecting) return;
+
     // 中文注释：
     // 当未填写IP或端口时，不再通过首页SnackBar提示，而是在按钮旁边显示文字与图标提示。
     if (_ipController.text.isEmpty || _portController.text.isEmpty) {
@@ -63,10 +69,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         _isConnected = false;
         _hasTested = true;
         _testStatusText = '请输入服务器IP和端口';
+        _statusVersion++; // 中文注释：递增版本，确保相同提示的连续出现也有不同的 Key
       });
       return;
     }
 
+    // 中文注释：立即标记为连接中，阻止再次点击。
     setState(() {
       _isConnecting = true;
     });
@@ -80,6 +88,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     wifiService.setServerAddress(ip, port);
 
     final isConnected = await wifiService.testConnection();
+    // 中文注释：若在等待过程中当前 Drawer 已被关闭或组件已卸载，避免对已卸载组件 setState
+    if (!mounted) return;
 
     setState(() {
       _isConnecting = false;
@@ -90,6 +100,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       _testStatusText = isConnected
           ? '连接成功'
           : '连接失败，请检查IP与端口';
+      _statusVersion++; // 中文注释：每次结果更新递增版本，避免 AnimatedSwitcher 在快速重复状态下的重复 Key
     });
 
     if (isConnected) {
@@ -220,7 +231,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             duration: const Duration(milliseconds: 200),
                             child: _isConnecting
                                 ? Row(
-                                    key: const ValueKey('connecting'),
+                                    // 中文注释：连接中状态使用常量 Key 即可，因已通过 _isConnecting 防并发
+                                    key: ValueKey('connecting'),
                                     children: const [
                                       Icon(Icons.wifi, color: Colors.blue, size: 18),
                                       SizedBox(width: 6),
@@ -236,7 +248,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                   )
                                 : (_hasTested
                                     ? Row(
-                                        key: const ValueKey('tested'),
+                                        // 中文注释：使用状态+版本组合生成唯一 Key，
+                                        // 即使连续出现相同状态（例如连续成功），也不会产生重复 Key。
+                                        key: ValueKey('tested_${_isConnected ? 'success' : 'fail'}_$_statusVersion'),
                                         children: [
                                           Icon(
                                             _isConnected
@@ -283,13 +297,29 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             leading: const Icon(Icons.info),
             title: const Text('关于'),
             onTap: () {
-              // 中文注释：先关闭抽屉，再弹出“关于”对话框，避免上下文被销毁导致对话框无法显示
+              // 中文注释：防重复点击。如果“关于”对话框正在显示或排队显示，则直接返回。
+              if (_isAboutDialogShowing) return;
+              _isAboutDialogShowing = true;
+
+              // 中文注释：先关闭抽屉，再使用全局 Navigator 的上下文弹出“关于”对话框，
+              // 避免使用已卸载的 Drawer 上下文导致 InheritedWidget（如 ListTileTheme）在卸载时仍有依赖，触发断言错误。
               Navigator.pop(context);
-              Future.microtask(() {
-                showDialog(
-                  context: context,
-                  builder: (_) => const AboutAppDialog(),
-                );
+              // 中文注释：使用下一帧回调确保 Drawer 完成关闭与元素卸载，
+              // 再安全地弹出对话框，避免 InheritedWidget 在卸载过程中仍被依赖。
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final safeContext = AppRouter.navigatorKey.currentContext;
+                if (safeContext != null) {
+                  showDialog(
+                    context: safeContext,
+                    builder: (_) => const AboutAppDialog(),
+                  ).whenComplete(() {
+                    // 中文注释：对话框关闭后，恢复可点击状态
+                    _isAboutDialogShowing = false;
+                  });
+                } else {
+                  // 中文注释：如果全局上下文不可用，恢复标志，避免卡住
+                  _isAboutDialogShowing = false;
+                }
               });
             },
           ),

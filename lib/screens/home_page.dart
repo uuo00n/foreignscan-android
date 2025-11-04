@@ -42,8 +42,6 @@ class HomePage extends ConsumerWidget {
       }
     });
 
-    final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-    
     // 使用WillPopScope处理返回手势
     return PopScope(
       canPop: false,
@@ -53,8 +51,8 @@ class HomePage extends ConsumerWidget {
         _showExitConfirmDialog(context);
       },
       child: Scaffold(
-        key: _scaffoldKey,
-        appBar: _buildAppBar(context, ref, _scaffoldKey),
+        // 中文注释：移除每次 build 重新创建的 GlobalKey，避免频繁重建带来的潜在问题。
+        appBar: _buildAppBar(context, ref),
         drawer: AppDrawer(
           onUploadPressed: () => _uploadLatestImage(context, ref),
         ),
@@ -70,13 +68,17 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, WidgetRef ref, GlobalKey<ScaffoldState> scaffoldKey) {
+  PreferredSizeWidget _buildAppBar(BuildContext context, WidgetRef ref) {
     return AppBar(
-      leading: IconButton(
-        icon: const Icon(Icons.menu),
-        onPressed: () {
-          scaffoldKey.currentState?.openDrawer();
-        },
+      // 中文注释：使用 Builder 获取位于 Scaffold 之下的上下文，
+      // 通过 Scaffold.of(context).openDrawer() 打开抽屉，避免对 GlobalKey 的依赖。
+      leading: Builder(
+        builder: (ctx) => IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () {
+            Scaffold.of(ctx).openDrawer();
+          },
+        ),
       ),
       title: const Text('智能防异物检测系统'),
       actions: [
