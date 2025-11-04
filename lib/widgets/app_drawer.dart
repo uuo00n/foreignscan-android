@@ -4,6 +4,8 @@ import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/providers/home_providers.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:logger/logger.dart';
+import 'package:foreignscan/core/providers/app_info_providers.dart';
+import 'package:foreignscan/widgets/about_app_dialog.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   final Function() onUploadPressed;
@@ -124,13 +126,21 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  '版本: 1.0.0',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 14,
-                  ),
-                ),
+                // 中文注释：版本号动态展示（优先使用 PackageInfo；加载中或错误时使用兜底值）
+                Builder(builder: (context) {
+                  final infoAsync = ref.watch(simpleAppInfoProvider);
+                  final versionText = infoAsync.maybeWhen(
+                    data: (info) => '版本: ${info.version} (build ${info.buildNumber})',
+                    orElse: () => '版本: 1.0.0',
+                  );
+                  return Text(
+                    versionText,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 14,
+                    ),
+                  );
+                }),
               ],
             ),
           ),
@@ -273,8 +283,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             leading: const Icon(Icons.info),
             title: const Text('关于'),
             onTap: () {
-              // TODO: 显示关于对话框
+              // 中文注释：先关闭抽屉，再弹出“关于”对话框，避免上下文被销毁导致对话框无法显示
               Navigator.pop(context);
+              Future.microtask(() {
+                showDialog(
+                  context: context,
+                  builder: (_) => const AboutAppDialog(),
+                );
+              });
             },
           ),
         ],
