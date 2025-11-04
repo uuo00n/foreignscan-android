@@ -22,6 +22,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   final TextEditingController _portController = TextEditingController();
   bool _isConnecting = false;
   bool _isConnected = false;
+  bool _hasTested = false; // 中文注释：是否已进行过“测试连接”，用于控制右侧状态提示的显示
+  String? _testStatusText; // 中文注释：测试连接的提示文案（成功/失败/输入缺失等）
   Map<String, dynamic>? _wifiInfo;
 
   @override
@@ -51,10 +53,15 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   }
 
   Future<void> _testConnection() async {
+    // 中文注释：
+    // 当未填写IP或端口时，不再通过首页SnackBar提示，而是在按钮旁边显示文字与图标提示。
     if (_ipController.text.isEmpty || _portController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入服务器IP和端口')),
-      );
+      setState(() {
+        _isConnecting = false;
+        _isConnected = false;
+        _hasTested = true;
+        _testStatusText = '请输入服务器IP和端口';
+      });
       return;
     }
 
@@ -75,6 +82,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     setState(() {
       _isConnecting = false;
       _isConnected = isConnected;
+      _hasTested = true;
+      // 中文注释：
+      // 为避免状态提示文字过长导致溢出，这里使用更短的文案。
+      _testStatusText = isConnected
+          ? '连接成功'
+          : '连接失败，请检查IP与端口';
     });
 
     if (isConnected) {
@@ -86,20 +99,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
       // 使样式图 Provider 失效并重新拉取，立刻刷新参考图
       ref.invalidate(styleImagesForSelectedSceneProvider);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('连接成功，已应用服务器地址：$newApiBaseUrl'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('连接失败，请检查IP、端口与同一WiFi网络'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // 中文注释：不再使用SnackBar提示，将状态反馈改为按钮旁的文字+图标提示（见UI部分）
     }
   }
 
@@ -187,8 +187,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     ),
                     const SizedBox(height: 16),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
+                        // 中文注释：测试连接按钮（点击后在右侧显示状态文字与图标）
                         ElevatedButton(
                           onPressed: _isConnecting ? null : _testConnection,
                           child: _isConnecting
@@ -201,12 +202,56 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                 )
                               : const Text('测试连接'),
                         ),
-                        ElevatedButton(
-                          onPressed: _isConnected ? widget.onUploadPressed : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
+                        const SizedBox(width: 12),
+                        // 中文注释：按钮右侧的状态提示区域使用 Expanded 包裹，
+                        // 以避免长文案在窄屏或窄容器下溢出。
+                        Expanded(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _isConnecting
+                                ? Row(
+                                    key: const ValueKey('connecting'),
+                                    children: const [
+                                      Icon(Icons.wifi, color: Colors.blue, size: 18),
+                                      SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          '正在连接...',
+                                          style: TextStyle(color: Colors.blue),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : (_hasTested
+                                    ? Row(
+                                        key: const ValueKey('tested'),
+                                        children: [
+                                          Icon(
+                                            _isConnected
+                                                ? Icons.check_circle
+                                                : Icons.error_outline,
+                                            color: _isConnected ? Colors.green : Colors.red,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              _testStatusText ?? (_isConnected ? '连接成功' : '连接失败'),
+                                              style: TextStyle(
+                                                color: _isConnected ? Colors.green : Colors.red,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 1,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : const SizedBox.shrink()),
                           ),
-                          child: const Text('确认传输'),
                         ),
                       ],
                     ),
