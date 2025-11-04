@@ -190,6 +190,29 @@ class HomeViewModel extends StateNotifier<HomeState> {
     }
   }
 
+  /// 更新场景的传输状态（例如上传成功后标记为已传输）
+  Future<void> updateSceneTransferStatus(String sceneId, bool isTransferred) async {
+    try {
+      // 更新内存中的场景列表
+      final updatedScenes = state.scenes.map((scene) {
+        if (scene.id == sceneId) {
+          return scene.copyWith(
+            isTransferred: isTransferred,
+            transferTime: isTransferred ? DateTime.now() : null,
+          );
+        }
+        return scene;
+      }).toList();
+
+      state = state.copyWith(scenes: updatedScenes);
+
+      // 持久化到本地缓存
+      await _sceneService.updateSceneTransferStatus(sceneId, isTransferred);
+    } catch (e) {
+      state = state.copyWith(errorMessage: '更新场景传输状态失败: $e');
+    }
+  }
+
   void clearError() {
     state = state.copyWith(errorMessage: null);
   }

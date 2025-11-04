@@ -91,6 +91,28 @@ class SceneService {
     }
   }
 
+  /// 更新场景的传输状态
+  /// - 上传成功后调用：设置 isTransferred=true，记录 transferTime
+  /// - 若取消或重置，可传 isTransferred=false 并清空 transferTime
+  Future<void> updateSceneTransferStatus(String sceneId, bool isTransferred) async {
+    try {
+      final scenes = await getScenes();
+      final updatedScenes = scenes.map((scene) {
+        if (scene.id == sceneId) {
+          return scene.copyWith(
+            isTransferred: isTransferred,
+            transferTime: isTransferred ? DateTime.now() : null,
+          );
+        }
+        return scene;
+      }).toList();
+
+      await saveScenes(updatedScenes);
+    } catch (e) {
+      throw Exception('更新场景传输状态失败: $e');
+    }
+  }
+
   Future<void> addScene(SceneData scene) async {
     try {
       final scenes = await getScenes();

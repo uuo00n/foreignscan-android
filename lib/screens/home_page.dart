@@ -408,6 +408,12 @@ class HomePage extends ConsumerWidget {
           );
 
           await homeViewModel.addInspectionRecord(newRecord);
+
+          // 上传成功后，标记场景为已传输并记录传输时间
+          // 中文说明：
+          // - 更新 isTransferred=true，使按钮文案切换为“重新传输”，卡片边框变为绿色
+          // - 记录 transferTime=now，便于后续审计或显示
+          await homeViewModel.updateSceneTransferStatus(selectedScene.id, true);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(

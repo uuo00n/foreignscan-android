@@ -123,8 +123,11 @@ class WiFiCommunicationService {
     }
   }
 
-  /// Upload image file to server
-  Future<bool> uploadImage(String imagePath, String recordId) async {
+  /// 上传图片文件到服务器（用于批量同步等场景）
+  /// 后端 Gin 处理器 UploadImage 期望的表单字段：
+  /// - file: 图片文件
+  /// - sceneId: 场景ID（可选，但建议提供以便归档到对应场景目录）
+  Future<bool> uploadImage(String imagePath, String recordId, {String? sceneId}) async {
     try {
       // Check if file exists
       final file = File(imagePath);
@@ -135,10 +138,13 @@ class WiFiCommunicationService {
 
       // Create multipart request
       final formData = FormData.fromMap({
-        'image': await MultipartFile.fromFile(
+        // 注意：后端字段名为 file，这里与后端保持一致
+        'file': await MultipartFile.fromFile(
           imagePath,
           filename: 'record_$recordId.jpg',
         ),
+        if (sceneId != null && sceneId.isNotEmpty) 'sceneId': sceneId,
+        // 可选元数据：recordId（后端会忽略未知字段，但我们保留用于日志追踪）
         'recordId': recordId,
       });
 
@@ -169,7 +175,9 @@ class WiFiCommunicationService {
     }
   }
   
-  /// Upload image directly from camera
+  /// 直接上传相机拍摄的图片
+  /// - 与后端 UploadImage 保持一致的字段命名（file, sceneId）
+  /// - 通过查询参数 filename 指定自定义文件名，便于在服务器侧识别
   Future<Map<String, dynamic>?> uploadImageFromCamera(String imagePath, {String? sceneId}) async {
     try {
       // Check if file exists
@@ -188,17 +196,20 @@ class WiFiCommunicationService {
           ? '${dateStr}_${sceneId}.jpg' 
           : '${dateStr}_unknown.jpg';
 
-      // Create multipart request
+      // 构建表单：与后端字段保持一致
       final formData = FormData.fromMap({
-        'image': await MultipartFile.fromFile(
+        'file': await MultipartFile.fromFile(
           imagePath,
           filename: fileName,
         ),
-        'customFileName': fileName, // 添加自定义文件名作为额外参数
+        if (sceneId != null && sceneId.isNotEmpty) 'sceneId': sceneId,
+        // 附带自定义文件名作为额外参数（后端主要使用 query 中的 filename）
+        'customFileName': fileName,
       });
 
       // 将文件名添加到URL中作为查询参数
       final response = await _dio.post(
+        // 兼容路由：/api/upload-image 与 /api/upload 均指向同一处理器
         'http://$_serverIP:$_port/api/upload-image?filename=$fileName',
         data: formData,
         options: Options(
