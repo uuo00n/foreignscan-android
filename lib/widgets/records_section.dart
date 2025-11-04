@@ -115,8 +115,9 @@ class RecordsSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 文案优化：拍摄记录中不显示ID，仅展示场景名称
                 Text(
-                  '${record.id} - ${record.sceneName}',
+                  record.sceneName,
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 4),

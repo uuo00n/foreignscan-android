@@ -91,9 +91,11 @@ class RecordService {
           ? InspectionRecord.fromJsonList(localJson)
           : <InspectionRecord>[];
 
-      // 3) 合并记录并按时间倒序排序（避免重复复杂化，直接拼接即可）
-      final combined = <InspectionRecord>[...localRecords, ...networkRecords];
-      combined.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      // 3) 合并记录并去重：优先使用“网络记录”的权威信息，保留“仅本地存在”的新记录
+      // 中文说明：
+      // - 修复重复显示同一图片的问题：之前直接拼接本地+网络，导致同一条记录出现两次甚至多次
+      // - 合并规则：以 id 为主键去重；若 id 为空则使用 imagePath+timestamp 作为备用键
+      final combined = _mergeAndDedupRecords(localRecords, networkRecords);
 
       // 4) 将网络记录写入本地，作为下次的兜底数据（避免不必要的对象复制）
       await saveRecords(combined);
@@ -122,9 +124,18 @@ class RecordService {
 
   Future<void> addRecord(InspectionRecord record) async {
     try {
-      final records = await getRecords();
-      records.insert(0, record);
-      await saveRecords(records);
+      // 仅读取本地缓存，避免再次拉取网络导致重复合并
+      final prefs = await _prefs;
+      final localJson = prefs.getString(_recordsKey);
+      final List<InspectionRecord> localRecords = localJson != null
+          ? InspectionRecord.fromJsonList(localJson)
+          : <InspectionRecord>[];
+
+      // 插入新记录到顶部
+      final updated = <InspectionRecord>[record, ...localRecords];
+
+      // 为避免后续刷新时再次出现重复，直接保存本地缓存
+      await saveRecords(updated);
     } catch (e) {
       throw Exception('添加检测记录失败: $e');
     }
@@ -201,5 +212,39 @@ class RecordService {
     }
     final normalizedBase = rootBase.endsWith('/') ? rootBase.substring(0, rootBase.length - 1) : rootBase;
     return '$normalizedBase$relative';
+  }
+
+  /// 合并并去重记录列表
+  /// 中文注释：
+  /// - 先将“网络记录”放入字典（键为唯一键），确保以服务器权威信息为准
+  /// - 再补充“本地记录”：若字典中不存在相同唯一键，则加入（保留仅本地存在的新记录）
+  /// - 唯一键策略：优先使用 id；若 id 为空，则使用 imagePath|timestamp 作为备用键，避免错误合并
+  /// - 返回值：按时间倒序排序的去重列表
+  List<InspectionRecord> _mergeAndDedupRecords(
+    List<InspectionRecord> localRecords,
+    List<InspectionRecord> networkRecords,
+  ) {
+    String _keyOf(InspectionRecord r) {
+      if (r.id.isNotEmpty) return r.id;
+      return '${r.imagePath}|${r.timestamp.millisecondsSinceEpoch}';
+    }
+
+    final Map<String, InspectionRecord> map = {};
+
+    // 1) 先放入网络数据（权威信息）
+    for (final r in networkRecords) {
+      map[_keyOf(r)] = r;
+    }
+
+    // 2) 再补充本地数据（仅当不存在同键时加入）
+    for (final r in localRecords) {
+      final key = _keyOf(r);
+      map.putIfAbsent(key, () => r);
+    }
+
+    // 3) 输出并排序（新在前）
+    final merged = map.values.toList();
+    merged.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return merged;
   }
 }
