@@ -382,13 +382,29 @@ class HomePage extends ConsumerWidget {
             ),
           );
           
-          // 添加检测记录
+          // 添加检测记录（改造为使用后端返回的 imageId 与图片访问URL）
+          // 中文说明：
+          // - 后端返回 result['imageId'] 与 result['path']（形如 /uploads/images/<scene>/<file>）
+          // - WiFi 服务提供 serverAddress（例如 http://172.20.10.3:3000），拼接形成完整URL
+          final wifiSvc = ref.read(wifiServiceProvider);
+          final String imageId = (result['imageId']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString());
+          final String relativePath = (result['path']?.toString() ?? result['accessPath']?.toString() ?? '');
+          String fullUrl = relativePath;
+          if (relativePath.isNotEmpty) {
+            final String base = wifiSvc.serverAddress; // 不包含 /api
+            // 确保 relativePath 以 '/' 开头
+            final String normalizedRel = relativePath.startsWith('/') ? relativePath : '/$relativePath';
+            // 避免 base 末尾有 '/' 时重复斜杠
+            final String normalizedBase = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+            fullUrl = '$normalizedBase$normalizedRel';
+          }
+
           final newRecord = InspectionRecord(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            id: imageId,
             sceneName: selectedScene.name,
-            imagePath: selectedScene.capturedImage!,
+            imagePath: fullUrl.isNotEmpty ? fullUrl : selectedScene.capturedImage!,
             timestamp: DateTime.now(),
-            status: '已确认',
+            status: '已上传',
           );
 
           await homeViewModel.addInspectionRecord(newRecord);

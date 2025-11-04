@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import '../models/scene_data.dart';
+import '../screens/fullscreen_image_page.dart';
 
 class SceneDisplay extends StatelessWidget {
   final SceneData scene;
@@ -68,7 +69,7 @@ class SceneDisplay extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _buildReferenceImage()),
+                Expanded(child: _buildReferenceImage(context)),
                 SizedBox(width: 16),
                 Expanded(child: _buildCaptureArea()),
               ],
@@ -93,7 +94,10 @@ class SceneDisplay extends StatelessWidget {
     );
   }
 
-  Widget _buildReferenceImage() {
+  /// 模板参考图区域
+  /// - 当存在 referenceImageUrl 时，支持点击全屏查看
+  /// - 加入 Hero 动画以提升动效体验
+  Widget _buildReferenceImage(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -120,34 +124,51 @@ class SceneDisplay extends StatelessWidget {
             child: (referenceImageUrl != null && referenceImageUrl!.isNotEmpty)
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      referenceImageUrl!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? (loadingProgress.cumulativeBytesLoaded /
-                                    (loadingProgress.expectedTotalBytes ?? 1))
-                                : null,
+                    child: GestureDetector(
+                      onTap: () {
+                        // 点击参考图 -> 进入全屏查看页面
+                        final url = referenceImageUrl!; // 这里已保证不为空
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => FullscreenImagePage(
+                              imageUrl: url,
+                              heroTag: url, // 使用 URL 作为 Hero 标签，保证唯一性
+                            ),
                           ),
                         );
                       },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.broken_image, size: 48, color: Colors.grey[400]),
-                              SizedBox(height: 8),
-                              Text('参考图加载失败', style: TextStyle(color: Colors.grey[600])),
-                            ],
-                          ),
-                        );
-                      },
+                      child: Hero(
+                        tag: referenceImageUrl!,
+                        child: Image.network(
+                          referenceImageUrl!,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? (loadingProgress.cumulativeBytesLoaded /
+                                        (loadingProgress.expectedTotalBytes ?? 1))
+                                    : null,
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.broken_image, size: 48, color: Colors.grey[400]),
+                                  SizedBox(height: 8),
+                                  Text('参考图加载失败', style: TextStyle(color: Colors.grey[600])),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
                   )
                 : Center(
