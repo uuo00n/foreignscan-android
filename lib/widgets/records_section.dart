@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/inspection_record.dart';
 import 'dart:io';
+import 'package:foreignscan/screens/record_detail_page.dart';
 
 class RecordsSection extends StatelessWidget {
   final List<InspectionRecord> records;
@@ -72,75 +73,90 @@ class RecordsSection extends StatelessWidget {
       
       itemCount: records.length,
       itemBuilder: (context, index) {
-        return _buildRecordCard(records[index]);
+        return _buildRecordCard(context, records[index]);
       },
     );
   }
 
-  Widget _buildRecordCard(InspectionRecord record) {
+  /// 构建单条拍摄记录卡片
+  /// 中文说明：
+  /// - 点击卡片跳转到“拍摄记录详情页”，查看大图与详细信息
+  Widget _buildRecordCard(BuildContext context, InspectionRecord record) {
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+    return InkWell(
+      onTap: () {
+        // 点击进入详情页
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RecordDetailPage(record: record),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[800],
-                borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[800],
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                ),
+                // 图片显示逻辑改造：
+                // 1) 若 imagePath 为完整URL（http/https），使用 Image.network 加载网络图片
+                // 2) 若为本地路径（非空且文件存在），使用 Image.file 加载本地图片
+                // 3) 否则显示占位图标
+                child: _buildImage(record.imagePath),
               ),
-              // 图片显示逻辑改造：
-              // 1) 若 imagePath 为完整URL（http/https），使用 Image.network 加载网络图片
-              // 2) 若为本地路径（非空且文件存在），使用 Image.file 加载本地图片
-              // 3) 否则显示占位图标
-              child: _buildImage(record.imagePath),
             ),
-          ),
-          Padding(
-            padding: EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 文案优化：拍摄记录中不显示ID，仅展示场景名称
-                Text(
-                  record.sceneName,
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  dateFormat.format(record.timestamp),
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                ),
-                SizedBox(height: 4),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.green[100],
-                    borderRadius: BorderRadius.circular(4),
+            Padding(
+              padding: EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 文案优化：拍摄记录中不显示ID，仅展示场景名称
+                  Text(
+                    record.sceneName,
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  child: Text(
-                    record.status,
-                    style: TextStyle(color: Colors.green[700], fontSize: 12),
+                  SizedBox(height: 4),
+                  Text(
+                    dateFormat.format(record.timestamp),
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
                   ),
-                ),
-              ],
+                  SizedBox(height: 4),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green[100],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      record.status,
+                      style: TextStyle(color: Colors.green[700], fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
