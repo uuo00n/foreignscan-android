@@ -27,7 +27,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   void initState() {
     super.initState();
     _ipController.text = '172.20.10.3'; // 默认IP
-    _portController.text = '8080'; // 默认端口
+    _portController.text = '3000'; // 默认端口（与Go后端一致）
     _loadWifiInfo();
   }
 

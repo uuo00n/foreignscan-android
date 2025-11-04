@@ -2,42 +2,62 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/models/scene_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
+import 'package:dio/dio.dart';
 
 final sceneServiceProvider = Provider<SceneService>((ref) {
-  return SceneService(ref.watch(sharedPreferencesProvider.future));
+  // 通过 SharedPreferences 做本地缓存兜底，Dio 用于请求后端接口
+  return SceneService(
+    ref.watch(sharedPreferencesProvider.future),
+    ref.read(dioProvider),
+  );
 });
 
 class SceneService {
   final Future<SharedPreferences> _prefs;
+  final Dio _dio;
   static const String _scenesKey = 'scenes';
 
-  SceneService(this._prefs);
+  SceneService(this._prefs, this._dio);
 
   Future<List<SceneData>> getScenes() async {
     try {
+      // 先尝试从后端接口获取
+      // 说明：后端 Gin 路由基础路径为 /api，这里使用 Dio 已设置的 baseUrl（例如 http://localhost:3000/api）
+      final response = await _dio.get('/scenes');
+      final data = response.data;
+
+      // 后端返回结构示例：{ success: true, scenes: [...] }
+      if (data is Map && data['scenes'] is List) {
+        final List scenesList = data['scenes'];
+        final scenes = scenesList.map((item) {
+          final m = item as Map<String, dynamic>;
+          return SceneData(
+            id: m['id']?.toString() ?? '', // ObjectID 转 hex 字符串
+            name: m['name']?.toString() ?? '',
+          );
+        }).toList().cast<SceneData>();
+
+        // 写入本地缓存作为兜底
+        await saveScenes(scenes);
+        return scenes;
+      }
+
+      // 如果结构不符合预期，尝试本地缓存兜底
       final prefs = await _prefs;
       final scenesJson = prefs.getString(_scenesKey);
-      
       if (scenesJson != null) {
         return SceneData.fromJsonList(scenesJson);
       }
-      
-      // 默认场景数据
-      final defaultScenes = [
-        SceneData(id: '001', name: '管道闸口'),
-        SceneData(id: '002', name: '主承轴区域'),
-        SceneData(id: '003', name: '冷却系统出口'),
-        SceneData(id: '004', name: '传动轴检测点'),
-        SceneData(id: '005', name: '润滑系统'),
-        SceneData(id: '006', name: '控制阀门'),
-        SceneData(id: '007', name: '进气管道'),
-        SceneData(id: '008', name: '排气系统'),
-        SceneData(id: '009', name: '温控单元'),
-      ];
-      
-      await saveScenes(defaultScenes);
-      return defaultScenes;
+
+      // 最后兜底：返回空列表
+      return <SceneData>[];
     } catch (e) {
+      // 网络或解析失败时，走本地缓存兜底
+      final prefs = await _prefs;
+      final scenesJson = prefs.getString(_scenesKey);
+      if (scenesJson != null) {
+        return SceneData.fromJsonList(scenesJson);
+      }
       throw Exception('获取场景数据失败: $e');
     }
   }

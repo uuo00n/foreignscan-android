@@ -248,6 +248,8 @@ class HomePage extends ConsumerWidget {
                     scene: selectedScene,
                     onCaptureClick: () => _navigateToCamera(context, ref),
                     onConfirmTransfer: () => _confirmTransfer(context, ref),
+                    // 从 Provider 获取首张模板参考图URL
+                    referenceImageUrl: ref.watch(referenceImageUrlProvider),
                   ),
                 ),
               ],

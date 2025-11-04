@@ -12,7 +12,7 @@ import 'package:network_info_plus/network_info_plus.dart';
 
 class WiFiCommunicationService {
   static const String _defaultServerIP = '172.20.10.3'; // Default Windows IP
-  static const int _defaultPort = 8080; // Default port
+  static const int _defaultPort = 3000; // 默认后端端口，已与 Go 后端配置保持一致
   static const Duration _connectionTimeout = Duration(seconds: 10);
 
   final Logger _logger;
@@ -59,10 +59,12 @@ class WiFiCommunicationService {
   /// Test connection to Windows server
   Future<bool> testConnection() async {
     try {
+      // 这里直接使用明确的 IP 和端口拼接 /ping（Go 后端提供），若连接失败请检查设备与服务器是否在同一局域网
       final response = await _dio.get('http://$_serverIP:$_port/ping');
       return response.statusCode == 200;
     } catch (e) {
-      _logger.e('Connection test failed: $e');
+      // 增强日志：输出当前尝试连接的地址，便于排查（例如端口是否为3000、IP是否正确）
+      _logger.e('Connection test failed: $e, address=http://$_serverIP:$_port');
       return false;
     }
   }

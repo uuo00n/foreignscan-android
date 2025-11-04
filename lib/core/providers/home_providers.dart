@@ -4,6 +4,8 @@ import 'package:foreignscan/models/inspection_record.dart';
 import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/record_service.dart';
 import 'package:foreignscan/core/services/wifi_communication_service.dart';
+import 'package:foreignscan/core/services/style_image_service.dart';
+import 'package:foreignscan/models/style_image.dart';
 import 'package:logger/logger.dart';
 
 // Home页面状态提供者
@@ -18,6 +20,34 @@ final homeViewModelProvider = StateNotifierProvider<HomeViewModel, HomeState>((r
 final scenesProvider = FutureProvider<List<SceneData>>((ref) async {
   final service = ref.read(sceneServiceProvider);
   return await service.getScenes();
+});
+
+// 当前选中场景的样式图（模板参考图）列表提供者
+final styleImagesForSelectedSceneProvider = FutureProvider.autoDispose<List<StyleImage>>((ref) async {
+  final homeState = ref.watch(homeViewModelProvider);
+  final styleService = ref.read(styleImageServiceProvider);
+
+  if (homeState.scenes.isEmpty) {
+    return <StyleImage>[];
+  }
+
+  final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
+  return await styleService.getStyleImagesByScene(selectedScene.id);
+});
+
+// 当前选中场景的首张样式图的完整URL（用于 SceneDisplay 的模板参考图）
+final referenceImageUrlProvider = Provider.autoDispose<String?>((ref) {
+  final styleImagesAsync = ref.watch(styleImagesForSelectedSceneProvider);
+  final styleService = ref.read(styleImageServiceProvider);
+
+  return styleImagesAsync.when(
+    data: (images) {
+      if (images.isEmpty) return null;
+      return styleService.buildImageUrl(images.first);
+    },
+    loading: () => null,
+    error: (_, __) => null,
+  );
 });
 
 // 检测记录提供者

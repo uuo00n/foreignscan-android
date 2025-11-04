@@ -26,6 +26,10 @@ class CameraConfig {
 class NetworkConfig {
   const NetworkConfig();
   
+  // 后端 API 基础地址（注意：在真机上不可使用 localhost，需要填写宿主机的局域网IP，例如 http://192.168.1.100:3000/api）
+  // 已根据你的后端地址修改为 172.20.10.3:3000
+  static const String apiBaseUrl = 'http://172.20.10.3:3000/api';
+
   static const Duration timeout = Duration(seconds: 30);
   static const int maxRetries = 3;
   static const Duration retryDelay = Duration(seconds: 1);

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camera/camera.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
+import 'package:foreignscan/config/app_config.dart';
 import 'package:logger/logger.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:foreignscan/core/services/wifi_communication_service.dart';
@@ -25,7 +26,16 @@ final loggerProvider = Provider<Logger>((ref) {
 });
 
 final dioProvider = Provider<Dio>((ref) {
-  final dio = Dio();
+  // 使用统一的后端 API 基础地址与超时设置
+  final dio = Dio(
+    BaseOptions(
+      // 说明：NetworkConfig 的字段是静态常量，必须通过类名访问，而不是通过实例访问
+      baseUrl: NetworkConfig.apiBaseUrl, // 后端 API 基础地址
+      connectTimeout: NetworkConfig.timeout, // 连接超时
+      receiveTimeout: NetworkConfig.timeout, // 接收超时
+      sendTimeout: NetworkConfig.timeout, // 发送超时
+    ),
+  );
   
   // 添加拦截器
   dio.interceptors.add(

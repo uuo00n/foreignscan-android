@@ -7,12 +7,14 @@ class SceneDisplay extends StatelessWidget {
   final SceneData scene;
   final VoidCallback onCaptureClick;
   final VoidCallback onConfirmTransfer;
+  final String? referenceImageUrl; // 模板参考图URL（来自后端样式图接口）
 
   const SceneDisplay({
     Key? key,
     required this.scene,
     required this.onCaptureClick,
     required this.onConfirmTransfer,
+    this.referenceImageUrl,
   }) : super(key: key);
 
   @override
@@ -114,9 +116,50 @@ class SceneDisplay extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.grey[300]!),
             ),
-            child: Center(
-              child: Icon(Icons.image, size: 64, color: Colors.grey[400]),
-            ),
+            // 如果存在 referenceImageUrl，则展示网络图片；否则展示占位
+            child: (referenceImageUrl != null && referenceImageUrl!.isNotEmpty)
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      referenceImageUrl!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? (loadingProgress.cumulativeBytesLoaded /
+                                    (loadingProgress.expectedTotalBytes ?? 1))
+                                : null,
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.broken_image, size: 48, color: Colors.grey[400]),
+                              SizedBox(height: 8),
+                              Text('参考图加载失败', style: TextStyle(color: Colors.grey[600])),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.image, size: 64, color: Colors.grey[400]),
+                        SizedBox(height: 8),
+                        Text('暂无模板参考图', style: TextStyle(color: Colors.grey[600])),
+                      ],
+                    ),
+                  ),
           ),
         ),
       ],
