@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/providers/home_providers.dart';
+import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:logger/logger.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
@@ -61,11 +62,13 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       _isConnecting = true;
     });
 
+    // 读取输入并进行基本校验
+    final ip = _ipController.text.trim();
+    final port = int.tryParse(_portController.text.trim()) ?? 3000;
+
+    // 更新 WiFi 服务的目标地址（用于非 REST 上传与测试）
     final wifiService = ref.read(wifiServiceProvider);
-    wifiService.setServerAddress(
-      _ipController.text,
-      int.parse(_portController.text),
-    );
+    wifiService.setServerAddress(ip, port);
 
     final isConnected = await wifiService.testConnection();
 
@@ -74,12 +77,30 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       _isConnected = isConnected;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isConnected ? '连接成功' : '连接失败'),
-        backgroundColor: isConnected ? Colors.green : Colors.red,
-      ),
-    );
+    if (isConnected) {
+      // 成功后，动态更新全局 Dio 的 baseUrl，以便样式图等 REST 接口使用最新地址
+      // 例如：http://<ip>:<port>/api
+      final dio = ref.read(dioProvider);
+      final newApiBaseUrl = 'http://$ip:$port/api';
+      dio.options.baseUrl = newApiBaseUrl; // 动态切换到新地址
+
+      // 使样式图 Provider 失效并重新拉取，立刻刷新参考图
+      ref.invalidate(styleImagesForSelectedSceneProvider);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('连接成功，已应用服务器地址：$newApiBaseUrl'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('连接失败，请检查IP、端口与同一WiFi网络'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override

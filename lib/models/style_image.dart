@@ -41,8 +41,14 @@ class StyleImage {
   // 参数 baseUrl 形如 http://<host>:<port>（不要带 /api），因为静态文件通常由服务器根路径下的 /uploads 提供
   // 如果后端返回 accessPath，则优先使用；否则尝试用 path 去掉前缀 '.'
   String toFullUrl(String baseUrl) {
-    final String? relative = accessPath ?? (path != null ? path!.replaceFirst(RegExp(r'^\.'), '') : null);
+    // 1) 优先使用后端返回的 accessPath（一般形如 /uploads/styles/<scene>/<file>）
+    // 2) 若仅返回 path（如 ./uploads/styles/...），则去掉前缀 '.'
+    // 3) 兜底：确保相对路径以 '/' 开头，避免拼接成 http://host:portuploads/... 的错误形式
+    String? relative = accessPath ?? (path != null ? path!.replaceFirst(RegExp(r'^\.'), '') : null);
     if (relative == null || relative.isEmpty) return '';
+    if (!relative.startsWith('/')) {
+      relative = '/$relative';
+    }
     // 确保 baseUrl 不以斜杠结尾
     final String normalizedBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
     return '$normalizedBase$relative';

@@ -31,9 +31,12 @@ class SceneTile extends StatelessWidget {
           children: [
             Icon(Icons.videocam, size: 32, color: Colors.grey[600]),
             SizedBox(height: 4),
+            // 显示场景名称，不再显示场景ID
             Text(
-              scene.id,
+              scene.name, // 使用名称替代ID
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis, // 名称过长时省略
+              maxLines: 1,
             ),
           ],
         ),
