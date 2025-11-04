@@ -106,6 +106,14 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
           }
           
           if (initialized && _currentController != null) {
+            // 中文注释：
+            // 初始化完成后，显式设置闪光灯为关闭状态，避免某些设备或插件默认使用自动闪光导致拍照时自动亮灯。
+            try {
+              await _currentController!.setFlashMode(FlashMode.off);
+            } catch (e) {
+              // 设置闪光灯失败不影响整体初始化，仅记录日志
+              _ref.read(loggerProvider).w('设置闪光灯为关闭失败: $e');
+            }
             state = AsyncValue.data(_currentController);
             _ref.read(loggerProvider).i('相机初始化成功: ${camera.name}');
             return; // 成功初始化，退出循环

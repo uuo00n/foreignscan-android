@@ -96,14 +96,21 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
         return;
       }
       
-      final controller = CameraController(
-        cameras.first,
-        ResolutionPreset.high,
-        enableAudio: false,
-      );
-      
-      await controller.initialize();
-      state = AsyncValue.data(controller);
+  final controller = CameraController(
+    cameras.first,
+    ResolutionPreset.high,
+    enableAudio: false,
+  );
+  
+  await controller.initialize();
+  // 中文注释：
+  // 初始化后显式关闭闪光灯，避免设备/插件默认自动闪光导致拍照时亮灯。
+  try {
+    await controller.setFlashMode(FlashMode.off);
+  } catch (e) {
+    _ref.read(loggerProvider).w('设置闪光灯为关闭失败: $e');
+  }
+  state = AsyncValue.data(controller);
       
       _ref.read(loggerProvider).i('相机初始化成功');
     } catch (e, stackTrace) {

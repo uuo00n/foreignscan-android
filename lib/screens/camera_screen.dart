@@ -67,28 +67,19 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       if (controller != null) {
         // 拍照前记录当前闪光灯状态
         final currentFlashMode = _flashMode;
-        
-        // 如果是自动模式，临时切换到闪光灯开启模式进行拍照
-        if (currentFlashMode == FlashMode.auto) {
-          // 临时开启闪光灯
-          await controller.setFlashMode(FlashMode.torch);
-        }
+        // 中文注释：
+        // 不再在“自动模式”下强行切换到常亮（torch），而是遵循控制器的自动策略：
+        // - 如果当前为 FlashMode.auto，保持自动模式，由系统根据环境光决定是否触发闪光
+        // - 如果当前为 FlashMode.off 或 FlashMode.torch，按用户选择执行，无需临时切换
         
         // 拍照
         final imagePath = await ref
             .read(cameraControllerProvider.notifier)
             .takePicture();
             
-        // 拍照后，如果之前是自动模式或常亮模式，恢复到关闭状态
-        if (currentFlashMode == FlashMode.auto || currentFlashMode == FlashMode.torch) {
-          // 更新状态
-          setState(() {
-            _flashMode = FlashMode.off;
-          });
-          
-          // 关闭闪光灯
-          await controller.setFlashMode(FlashMode.off);
-        }
+        // 中文注释：
+        // 拍照完成后，不再强制恢复为关闭，保持用户选择的闪光灯模式，提升一致性。
+        // 若需要拍完即关闭，可根据需求在此处恢复为 off。
         
         if (mounted && imagePath != null) {
           // 直接返回拍摄的照片路径
@@ -241,7 +232,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                         ? FlashMode.torch
                                         : FlashMode.off);
                               });
-                              
+                               
                               // 应用闪光灯设置
                               await controller.setFlashMode(_flashMode);
                             }
