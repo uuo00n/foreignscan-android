@@ -6,6 +6,7 @@ import 'package:foreignscan/config/app_config.dart';
 import 'package:logger/logger.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:foreignscan/core/services/wifi_communication_service.dart';
+import 'package:foreignscan/core/services/local_cache_service.dart';
 
 // 全局服务提供者
 final sharedPreferencesProvider = FutureProvider<SharedPreferences>((ref) async {
@@ -152,4 +153,9 @@ final isOnlineProvider = Provider<bool>((ref) {
 // WiFi通信服务提供者
 final wifiCommunicationServiceProvider = Provider<WiFiCommunicationService>((ref) {
   return WiFiCommunicationService(ref.read(loggerProvider));
+});
+
+// 本地图片缓存服务提供者
+final localCacheServiceProvider = Provider<LocalCacheService>((ref) {
+  return LocalCacheService(ref.read(dioProvider));
 });

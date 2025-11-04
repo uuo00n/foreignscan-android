@@ -9,6 +9,7 @@ class SceneDisplay extends StatelessWidget {
   final VoidCallback onCaptureClick;
   final VoidCallback onConfirmTransfer;
   final String? referenceImageUrl; // 模板参考图URL（来自后端样式图接口）
+  final bool isReferenceLoading; // 模板参考图加载中标记（用于展示加载动画）
 
   const SceneDisplay({
     Key? key,
@@ -16,6 +17,7 @@ class SceneDisplay extends StatelessWidget {
     required this.onCaptureClick,
     required this.onConfirmTransfer,
     this.referenceImageUrl,
+    this.isReferenceLoading = false,
   }) : super(key: key);
 
   @override
@@ -120,70 +122,126 @@ class SceneDisplay extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.grey[300]!),
             ),
-            // 如果存在 referenceImageUrl，则展示网络图片；否则展示占位
-            child: (referenceImageUrl != null && referenceImageUrl!.isNotEmpty)
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: GestureDetector(
-                      onTap: () {
-                        // 点击参考图 -> 进入全屏查看页面
-                        final url = referenceImageUrl!; // 这里已保证不为空
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => FullscreenImagePage(
-                              imageUrl: url,
-                              heroTag: url, // 使用 URL 作为 Hero 标签，保证唯一性
-                            ),
-                          ),
-                        );
-                      },
-                      child: Hero(
-                        tag: referenceImageUrl!,
-                        child: Image.network(
-                          referenceImageUrl!,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? (loadingProgress.cumulativeBytesLoaded /
-                                        (loadingProgress.expectedTotalBytes ?? 1))
-                                    : null,
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.broken_image, size: 48, color: Colors.grey[400]),
-                                  SizedBox(height: 8),
-                                  Text('参考图加载失败', style: TextStyle(color: Colors.grey[600])),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+            // 中文说明：
+            // 优先展示“加载动画”；若非加载且有URL/路径则展示图片；否则展示占位
+            child: isReferenceLoading
+                ? const Center(
+                    child: SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: CircularProgressIndicator(),
                     ),
                   )
-                : Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.image, size: 64, color: Colors.grey[400]),
-                        SizedBox(height: 8),
-                        Text('暂无模板参考图', style: TextStyle(color: Colors.grey[600])),
-                      ],
-                    ),
-                  ),
+                : (referenceImageUrl != null && referenceImageUrl!.isNotEmpty)
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: GestureDetector(
+                          onTap: () {
+                            final pathOrUrl = referenceImageUrl!;
+                            // 点击参考图 -> 进入全屏查看页面（兼容本地文件与网络图片）
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => FullscreenImagePage(
+                                  imageUrl: pathOrUrl,
+                                  heroTag: pathOrUrl, // 使用路径或URL作为Hero标签，保证唯一性
+                                ),
+                              ),
+                            );
+                          },
+                          child: Hero(
+                            tag: referenceImageUrl!,
+                            child: _buildReferenceImageContent(referenceImageUrl!),
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.image, size: 64, color: Colors.grey[400]),
+                            SizedBox(height: 8),
+                            Text('暂无模板参考图', style: TextStyle(color: Colors.grey[600])),
+                          ],
+                        ),
+                      ),
           ),
         ),
       ],
+    );
+  }
+
+  /// 构建参考图内容：
+  /// 中文注释：
+  /// - 若为 http/https 则使用 Image.network；
+  /// - 否则尝试当成本地文件路径使用 Image.file；
+  /// - 加载失败时显示兜底占位，避免多层嵌套逻辑。
+  Widget _buildReferenceImageContent(String pathOrUrl) {
+    final isNetwork = pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://');
+    if (isNetwork) {
+      return Image.network(
+        pathOrUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? (loadingProgress.cumulativeBytesLoaded /
+                      (loadingProgress.expectedTotalBytes ?? 1))
+                  : null,
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.broken_image, size: 48, color: Colors.grey[400]),
+                SizedBox(height: 8),
+                Text('参考图加载失败', style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    // 尝试作为本地文件路径
+    final file = File(pathOrUrl);
+    if (file.existsSync()) {
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (context, error, stackTrace) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.broken_image, size: 48, color: Colors.grey[400]),
+                SizedBox(height: 8),
+                Text('参考图加载失败', style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    // 兜底占位
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.image, size: 64, color: Colors.grey[400]),
+          SizedBox(height: 8),
+          Text('暂无模板参考图', style: TextStyle(color: Colors.grey[600])),
+        ],
+      ),
     );
   }
 

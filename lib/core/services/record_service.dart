@@ -3,6 +3,7 @@ import 'package:foreignscan/models/inspection_record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/services/scene_service.dart';
+import 'package:foreignscan/core/services/local_cache_service.dart';
 import 'package:dio/dio.dart';
 
 // 记录服务：从后端拉取图片记录并与本地缓存合并
@@ -11,6 +12,7 @@ final recordServiceProvider = Provider<RecordService>((ref) {
     ref.watch(sharedPreferencesProvider.future),
     ref.read(dioProvider),
     ref.read(sceneServiceProvider),
+    ref.read(localCacheServiceProvider),
   );
 });
 
@@ -18,10 +20,11 @@ class RecordService {
   final Future<SharedPreferences> _prefs;
   final Dio _dio;
   final SceneService _sceneService;
+  final LocalCacheService _cache;
 
   static const String _recordsKey = 'inspection_records';
 
-  RecordService(this._prefs, this._dio, this._sceneService);
+  RecordService(this._prefs, this._dio, this._sceneService, this._cache);
 
   /// 获取拍摄记录（优先网络，失败兜底本地缓存）
   /// 说明：
@@ -97,10 +100,26 @@ class RecordService {
       // - 合并规则：以 id 为主键去重；若 id 为空则使用 imagePath+timestamp 作为备用键
       final combined = _mergeAndDedupRecords(localRecords, networkRecords);
 
-      // 4) 将网络记录写入本地，作为下次的兜底数据（避免不必要的对象复制）
-      await saveRecords(combined);
+      // 4) 图片离线缓存：将网络图片下载到本地并替换 imagePath；失败则回退使用原combined
+      // 中文注释：
+      // - 为避免多层嵌套，采用 try-catch 包裹缓存过程；
+      // - 仅对 http/https 的图片执行下载，本地路径保持不变；
+      List<InspectionRecord> cachedCombined = combined;
+      try {
+        cachedCombined = await _cache.cacheRecordImages<InspectionRecord>(
+          records: combined,
+          getImagePath: (r) => r.imagePath,
+          getIdOrKey: (r) => r.id.isNotEmpty ? r.id : r.timestamp.millisecondsSinceEpoch.toString(),
+          copyWithImagePath: (r, newPath) => r.copyWith(imagePath: newPath),
+        );
+      } catch (_) {
+        // 缓存失败不影响主流程，继续使用合并后的记录
+      }
 
-      return combined;
+      // 5) 将（可能已替换为本地路径的）记录写入本地，作为下次兜底数据
+      await saveRecords(cachedCombined);
+
+      return cachedCombined;
     } catch (e) {
       // 网络失败时，使用本地缓存兜底
       final prefs = await _prefs;

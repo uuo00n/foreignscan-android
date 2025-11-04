@@ -1,10 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:io';
 import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/models/inspection_record.dart';
 import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/record_service.dart';
 import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/services/style_image_service.dart';
+import 'package:foreignscan/core/services/local_cache_service.dart';
+import 'package:foreignscan/core/providers/app_providers.dart'; // 引入全局Provider定义，包含localCacheServiceProvider
 import 'package:foreignscan/models/style_image.dart';
 import 'package:logger/logger.dart';
 
@@ -26,28 +29,70 @@ final scenesProvider = FutureProvider<List<SceneData>>((ref) async {
 final styleImagesForSelectedSceneProvider = FutureProvider.autoDispose<List<StyleImage>>((ref) async {
   final homeState = ref.watch(homeViewModelProvider);
   final styleService = ref.read(styleImageServiceProvider);
+  final cacheService = ref.read(localCacheServiceProvider);
 
   if (homeState.scenes.isEmpty) {
     return <StyleImage>[];
   }
 
   final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
-  return await styleService.getStyleImagesByScene(selectedScene.id);
+  final images = await styleService.getStyleImagesByScene(selectedScene.id);
+
+  // 预缓存：若存在首张样式图，先将其下载到本地，便于拍摄时离线查看
+  if (images.isNotEmpty) {
+    final first = images.first;
+    final remoteUrl = styleService.buildImageUrl(first);
+    // 子目录：style_images/<sceneId>；文件名：<styleId>_<filename或style.jpg>
+    final filename = '${first.id}_${first.filename ?? 'style.jpg'}';
+    await cacheService.ensureCachedImage(
+      url: remoteUrl,
+      subdir: 'style_images/${selectedScene.id}',
+      filename: filename,
+    );
+  }
+
+  return images;
 });
 
 // 当前选中场景的首张样式图的完整URL（用于 SceneDisplay 的模板参考图）
-final referenceImageUrlProvider = Provider.autoDispose<String?>((ref) {
+final referenceImageUrlProvider = FutureProvider.autoDispose<String?>((ref) async {
+  // 中文说明：
+  // 1) 优先读取样式图列表（在线时），若有数据则计算首张图的本地缓存路径并返回；
+  // 2) 若无数据（离线/加载中/错误），则直接在本地 style_images/<sceneId>/ 目录中查找已有缓存文件作为兜底；
+  final homeState = ref.watch(homeViewModelProvider);
   final styleImagesAsync = ref.watch(styleImagesForSelectedSceneProvider);
   final styleService = ref.read(styleImageServiceProvider);
+  final cacheService = ref.read(localCacheServiceProvider);
 
-  return styleImagesAsync.when(
-    data: (images) {
-      if (images.isEmpty) return null;
-      return styleService.buildImageUrl(images.first);
-    },
-    loading: () => null,
-    error: (_, __) => null,
-  );
+  // 没有场景数据则直接返回 null
+  if (homeState.scenes.isEmpty) {
+    return null;
+  }
+  final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
+
+  // 情况一：样式图列表可用且非空（通常为在线场景）
+  if (styleImagesAsync.hasValue) {
+    final images = styleImagesAsync.value ?? const <StyleImage>[];
+    if (images.isNotEmpty) {
+      final first = images.first;
+      final remoteUrl = styleService.buildImageUrl(first);
+      // 计算本地路径并优先返回本地缓存
+      final filename = '${first.id}_${first.filename ?? 'style.jpg'}';
+      final localPath = await cacheService.buildLocalPath(
+        subdir: 'style_images/${selectedScene.id}',
+        filename: filename,
+      );
+      final file = File(localPath);
+      if (file.existsSync()) {
+        return localPath; // 本地已缓存，优先返回
+      }
+      return remoteUrl; // 兜底返回网络URL
+    }
+  }
+
+  // 情况二：无样式图数据（离线/加载中/错误）—> 本地兜底：从 style_images/<sceneId>/ 中找首个文件
+  final cached = await cacheService.findFirstFileInSubdir('style_images/${selectedScene.id}');
+  return cached; // 可能为 null；UI 层需做无图兜底处理
 });
 
 // 检测记录提供者

@@ -246,12 +246,22 @@ class HomePage extends ConsumerWidget {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: SceneDisplay(
-                    scene: selectedScene,
-                    onCaptureClick: () => _navigateToCamera(context, ref),
-                    onConfirmTransfer: () => _confirmTransfer(context, ref),
-                    // 从 Provider 获取首张模板参考图URL
-                    referenceImageUrl: ref.watch(referenceImageUrlProvider),
+                  child: Builder(
+                    builder: (_) {
+                      // 中文说明：
+                      // 传入加载状态以在SceneDisplay中显示加载动画，同时传入已解析的URL/路径。
+                      final refImageAsync = ref.watch(referenceImageUrlProvider);
+                      return SceneDisplay(
+                        scene: selectedScene,
+                        onCaptureClick: () => _navigateToCamera(context, ref),
+                        onConfirmTransfer: () => _confirmTransfer(context, ref),
+                        referenceImageUrl: refImageAsync.maybeWhen(
+                          data: (v) => v,
+                          orElse: () => null,
+                        ),
+                        isReferenceLoading: refImageAsync.isLoading,
+                      );
+                    },
                   ),
                 ),
               ],
