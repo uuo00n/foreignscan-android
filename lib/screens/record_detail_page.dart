@@ -8,6 +8,7 @@ import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/style_image_service.dart';
 import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/models/style_image.dart';
+import 'package:foreignscan/core/providers/app_providers.dart';
 
 /// 拍摄记录详情页（对比图展示）
 /// 中文说明：
@@ -252,43 +253,62 @@ class RecordDetailPage extends ConsumerWidget {
                   if (images.isEmpty) {
                     return _emptyPanel('暂无样式图');
                   }
-                  // 取第一张样式图作为参考图
-                  final service = ref.read(styleImageServiceProvider);
-                  final url = service.buildImageUrl(images.first);
-                  if (url.isEmpty) {
-                    return _emptyPanel('暂无样式图');
-                  }
+                  // 取第一张样式图作为参考图，并优先使用本地缓存路径
+                  final first = images.first;
+                  final heroTag = 'style-image-$sceneName-${first.id}';
+                  return FutureBuilder<String?>(
+                    future: _getStyleImagePathOrUrl(ref, matched.id, first),
+                    builder: (context, pathSnap) {
+                      if (pathSnap.connectionState != ConnectionState.done) {
+                        return _loadingPanel();
+                      }
+                      final pathOrUrl = pathSnap.data;
+                      if (pathOrUrl == null || pathOrUrl.isEmpty) {
+                        return _emptyPanel('暂无样式图');
+                      }
 
-                  final heroTag = 'style-image-$sceneName-${images.first.id}';
-                  return _imagePanel(
-                    context: context,
-                    imageWidget: GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => FullscreenImagePage(
-                              imageUrl: url,
-                              heroTag: heroTag,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Hero(
-                        tag: heroTag,
-                        child: Image.network(
-                          url,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          errorBuilder: (context, error, stack) => _brokenImagePlaceholder(),
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return const Center(child: CircularProgressIndicator());
+                      final isRemote = pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://');
+                      final imageWidget = isRemote
+                          ? Image.network(
+                              pathOrUrl,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              errorBuilder: (context, error, stack) => _brokenImagePlaceholder(),
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) return child;
+                                return const Center(child: CircularProgressIndicator());
+                              },
+                            )
+                          : Image.file(
+                              File(pathOrUrl),
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              errorBuilder: (context, error, stack) => _brokenImagePlaceholder(),
+                            );
+
+                      return _imagePanel(
+                        context: context,
+                        imageWidget: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => FullscreenImagePage(
+                                  imageUrl: pathOrUrl,
+                                  heroTag: heroTag,
+                                ),
+                              ),
+                            );
                           },
+                          child: Hero(
+                            tag: heroTag,
+                            child: imageWidget,
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   );
                 },
               );
@@ -297,6 +317,36 @@ class RecordDetailPage extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// 解析样式图的本地缓存路径或远程URL（优先返回本地路径）
+  /// 中文注释：
+  /// - 先构造本地缓存路径：style_images/<sceneId>/<styleId>_<filename或style.jpg>
+  /// - 若本地文件存在，直接返回本地路径；
+  /// - 否则尝试下载缓存（ensureCachedImage），成功则返回本地路径；
+  /// - 最后兜底返回远程URL。
+  Future<String?> _getStyleImagePathOrUrl(WidgetRef ref, String sceneId, StyleImage image) async {
+    final styleService = ref.read(styleImageServiceProvider);
+    final cacheService = ref.read(localCacheServiceProvider);
+    final remoteUrl = styleService.buildImageUrl(image);
+    if (remoteUrl.isEmpty) return null;
+
+    final filename = '${image.id}_${image.filename ?? 'style.jpg'}';
+    final localPath = await cacheService.buildLocalPath(
+      subdir: 'style_images/$sceneId',
+      filename: filename,
+    );
+    final file = File(localPath);
+    if (file.existsSync()) {
+      return localPath; // 已缓存
+    }
+    // 尝试缓存下载
+    final cached = await cacheService.ensureCachedImage(
+      url: remoteUrl,
+      subdir: 'style_images/$sceneId',
+      filename: filename,
+    );
+    return cached ?? remoteUrl;
   }
 
   /// 右侧用户图片面板
