@@ -73,7 +73,7 @@ class SceneDisplay extends StatelessWidget {
               children: [
                 Expanded(child: _buildReferenceImage(context)),
                 SizedBox(width: 16),
-                Expanded(child: _buildCaptureArea()),
+                Expanded(child: _buildCaptureArea(context)),
               ],
             ),
           ),
@@ -245,7 +245,7 @@ class SceneDisplay extends StatelessWidget {
     );
   }
 
-  Widget _buildCaptureArea() {
+  Widget _buildCaptureArea(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -272,14 +272,31 @@ class SceneDisplay extends StatelessWidget {
                 ),
                 child: scene.capturedImage != null
                     ? ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    File(scene.capturedImage!),
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                  ),
-                )
+                        borderRadius: BorderRadius.circular(8),
+                        child: GestureDetector(
+                          // 中文注释：点击实时拍摄区域中的已拍图片，进入全屏查看（支持缩放/拖拽）
+                          onTap: () {
+                            final path = scene.capturedImage!; // 已拍摄图片的本地路径
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => FullscreenImagePage(
+                                  imageUrl: path,
+                                  heroTag: path, // 中文注释：使用图片路径作为Hero标签，确保唯一性
+                                ),
+                              ),
+                            );
+                          },
+                          child: Hero(
+                            tag: scene.capturedImage!,
+                            child: Image.file(
+                              File(scene.capturedImage!),
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                            ),
+                          ),
+                        ),
+                      )
                     : Center(
                   child: Text(
                     '请拍摄该场景',
