@@ -82,7 +82,9 @@ class HomePage extends ConsumerWidget {
       ),
       title: const Text('智能防异物检测系统'),
       actions: [
+        // 中文注释：屏蔽首页的“新建检测”按钮，仅保留“检测结果”入口
         AppBarActions(
+          showNewDetection: false,
           onNewDetectionPressed: () => _startNewInspection(context, ref),
           onDetectionResultsPressed: () => AppRouter.navigateToDetectionResult(
             const DetectionResultArguments(
