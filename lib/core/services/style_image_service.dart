@@ -3,22 +3,29 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/config/app_config.dart';
 import 'package:foreignscan/models/style_image.dart';
 
 // Provider：样式图服务
 final styleImageServiceProvider = Provider<StyleImageService>((ref) {
-  return StyleImageService(ref.read(dioProvider));
+  // 引入 SharedPreferences 以实现样式图的本地缓存兜底
+  return StyleImageService(
+    ref.watch(sharedPreferencesProvider.future),
+    ref.read(dioProvider),
+  );
 });
 
 class StyleImageService {
+  final Future<SharedPreferences> _prefs;
   final Dio _dio;
 
-  StyleImageService(this._dio);
+  StyleImageService(this._prefs, this._dio);
 
   // 获取指定场景的样式图列表
   Future<List<StyleImage>> getStyleImagesByScene(String sceneId) async {
+    final cacheKey = 'style_images_$sceneId';
     try {
       // 说明：Dio 的 baseUrl 已含 /api 前缀，因此这里使用 /style-images/scene/<sceneId>
       final response = await _dio.get('/style-images/scene/$sceneId');
@@ -26,12 +33,33 @@ class StyleImageService {
 
       if (data is Map && data['styleImages'] is List) {
         final List items = data['styleImages'];
-        return items.map((e) => StyleImage.fromJson(e as Map<String, dynamic>)).toList();
+        final images = items.map((e) => StyleImage.fromJson(e as Map<String, dynamic>)).toList();
+        // 成功拉取后写入本地缓存，便于离线展示
+        try {
+          final prefs = await _prefs;
+          final jsonList = images.map((e) => e.toJson()).toList();
+          await prefs.setString(cacheKey, StyleImage.toJsonList(jsonList));
+        } catch (_) {}
+        return images;
+      }
+
+      // 若结构不符合预期，尝试从本地缓存兜底
+      final prefs = await _prefs;
+      final cached = prefs.getString(cacheKey);
+      if (cached != null && cached.isNotEmpty) {
+        return StyleImage.fromJsonList(cached);
       }
 
       return <StyleImage>[];
     } catch (e) {
-      // 请求失败返回空列表
+      // 网络失败：使用本地缓存兜底
+      try {
+        final prefs = await _prefs;
+        final cached = prefs.getString(cacheKey);
+        if (cached != null && cached.isNotEmpty) {
+          return StyleImage.fromJsonList(cached);
+        }
+      } catch (_) {}
       return <StyleImage>[];
     }
   }

@@ -1,6 +1,7 @@
 // ==================== lib/models/style_image.dart ====================
 // 样式图（模板参考图）模型定义
 // 说明：用于承接后端 /api/style-images 与 /api/style-images/scene/:sceneId 的响应数据
+import 'dart:convert';
 
 class StyleImage {
   final String id; // 样式图ID（ObjectID的Hex字符串）
@@ -52,5 +53,29 @@ class StyleImage {
     // 确保 baseUrl 不以斜杠结尾
     final String normalizedBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
     return '$normalizedBase$relative';
+  }
+
+  // 序列化为JSON，便于本地缓存
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'sceneId': sceneId,
+      'name': name,
+      'description': description,
+      'filename': filename,
+      'path': path,
+      'accessPath': accessPath,
+    };
+  }
+
+  // 从JSON字符串列表反序列化（用于本地缓存读取）
+  static List<StyleImage> fromJsonList(String jsonString) {
+    final List<dynamic> jsonList = jsonDecode(jsonString);
+    return jsonList.map((e) => StyleImage.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  // 将JSON Map列表序列化为字符串（用于本地缓存写入）
+  static String toJsonList(List<Map<String, dynamic>> list) {
+    return jsonEncode(list);
   }
 }

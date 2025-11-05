@@ -1,26 +1,32 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:foreignscan/models/inspection_record.dart';
 import 'package:foreignscan/screens/fullscreen_image_page.dart';
+import 'package:foreignscan/core/services/scene_service.dart';
+import 'package:foreignscan/core/services/style_image_service.dart';
+import 'package:foreignscan/models/scene_data.dart';
+import 'package:foreignscan/models/style_image.dart';
 
-/// 拍摄记录详情页
+/// 拍摄记录详情页（对比图展示）
 /// 中文说明：
-/// - 展示单条拍摄记录的图片（支持网络/本地）、场景名称、时间与状态
-/// - 支持点击图片进入全屏查看（可缩放/拖动），并使用 Hero 动效
-class RecordDetailPage extends StatelessWidget {
+/// - 左侧展示“场景样式图”（参考图，来自后端样式图接口）；
+/// - 右侧展示“用户拍摄/上传的图片”；
+/// - 两侧图片均支持点击进入全屏查看，带 Hero 动效；
+class RecordDetailPage extends ConsumerWidget {
   final InspectionRecord record;
 
   const RecordDetailPage({super.key, required this.record});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
-    final heroTag = record.id.isNotEmpty ? 'record-image-${record.id}' : 'record-image-${record.imagePath}';
+    final heroTagUser = record.id.isNotEmpty ? 'record-image-${record.id}' : 'record-image-${record.imagePath}';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('拍摄记录详情'),
+        title: const Text('拍摄记录详情（对比图）'),
         actions: [
           // 右上角全屏查看按钮
           IconButton(
@@ -31,7 +37,7 @@ class RecordDetailPage extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (_) => FullscreenImagePage(
                     imageUrl: record.imagePath,
-                    heroTag: heroTag,
+                    heroTag: heroTagUser,
                   ),
                 ),
               );
@@ -41,47 +47,46 @@ class RecordDetailPage extends StatelessWidget {
           ),
         ],
       ),
-      body: ListView(
+      body: Padding(
         padding: const EdgeInsets.all(16),
-        children: [
-          // 顶部图片：点击也可以进入全屏查看
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => FullscreenImagePage(
-                    imageUrl: record.imagePath,
-                    heroTag: heroTag,
-                  ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 顶部标题与说明
+            Row(
+              children: [
+                Text(
+                  '场景：${record.sceneName}',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-              );
-            },
-            child: Hero(
-              tag: heroTag,
-              child: _buildImage(record.imagePath),
+                const SizedBox(width: 12),
+                Text(
+                  dateFormat.format(record.timestamp),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+                const Spacer(),
+                _buildStatus(record.status),
+              ],
             ),
-          ),
-          const SizedBox(height: 16),
-          // 信息卡片：场景名称、时间、状态
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 16),
+            // 对比图区域：左侧样式图（参考图） + 右侧用户图片
+            Expanded(
+              child: Row(
                 children: [
-                  _buildInfoRow(Icons.location_on, '场景', record.sceneName),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(Icons.access_time, '时间', dateFormat.format(record.timestamp)),
-                  const SizedBox(height: 8),
-                  _buildStatus(record.status),
+                  // 左侧：样式图
+                  Expanded(
+                    child: _buildStyleImagePanel(context, ref, record.sceneName),
+                  ),
+                  const SizedBox(width: 16),
+                  // 右侧：用户拍摄图片
+                  Expanded(
+                    child: _buildUserImagePanel(context, record.imagePath, heroTagUser),
+                  ),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -195,6 +200,207 @@ class RecordDetailPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(status, style: TextStyle(color: fg, fontSize: 13)),
+    );
+  }
+
+  /// 左侧样式图（参考图）面板
+  /// 中文注释：
+  /// - 逻辑：先从场景列表中找到与记录场景名匹配的场景ID；再请求该场景的样式图列表；
+  ///   若获取到样式图，取首图作为参考图；失败或为空则展示“暂无样式图”。
+  /// - 交互：点击样式图进入全屏查看（支持缩放/拖拽），带 Hero 动效。
+  Widget _buildStyleImagePanel(BuildContext context, WidgetRef ref, String sceneName) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.grey[600],
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Text('样式参考图', style: TextStyle(color: Colors.white, fontSize: 12)),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: FutureBuilder<List<SceneData>>(
+            future: ref.read(sceneServiceProvider).getScenes(),
+            builder: (context, scenesSnap) {
+              if (scenesSnap.connectionState != ConnectionState.done) {
+                return _loadingPanel();
+              }
+              if (scenesSnap.hasError || !scenesSnap.hasData) {
+                return _emptyPanel('暂无样式图');
+              }
+              final scenes = scenesSnap.data!;
+              // 根据场景名称匹配到场景ID（中文注释：若名称不唯一，则取第一个匹配项）
+              final normalizedTarget = sceneName.trim().toLowerCase();
+              final matched = scenes.firstWhere(
+                (s) => s.name.trim().toLowerCase() == normalizedTarget,
+                orElse: () => SceneData(id: '', name: ''),
+              );
+              if (matched.id.isEmpty) {
+                return _emptyPanel('暂无样式图');
+              }
+
+              return FutureBuilder<List<StyleImage>>(
+                future: ref.read(styleImageServiceProvider).getStyleImagesByScene(matched.id),
+                builder: (context, imagesSnap) {
+                  if (imagesSnap.connectionState != ConnectionState.done) {
+                    return _loadingPanel();
+                  }
+                  final images = imagesSnap.data ?? const <StyleImage>[];
+                  if (images.isEmpty) {
+                    return _emptyPanel('暂无样式图');
+                  }
+                  // 取第一张样式图作为参考图
+                  final service = ref.read(styleImageServiceProvider);
+                  final url = service.buildImageUrl(images.first);
+                  if (url.isEmpty) {
+                    return _emptyPanel('暂无样式图');
+                  }
+
+                  final heroTag = 'style-image-$sceneName-${images.first.id}';
+                  return _imagePanel(
+                    context: context,
+                    imageWidget: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FullscreenImagePage(
+                              imageUrl: url,
+                              heroTag: heroTag,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Hero(
+                        tag: heroTag,
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          errorBuilder: (context, error, stack) => _brokenImagePlaceholder(),
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return const Center(child: CircularProgressIndicator());
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 右侧用户图片面板
+  /// 中文注释：兼容网络图片与本地图片，并支持点击进入全屏查看。
+  Widget _buildUserImagePanel(BuildContext context, String imagePath, String heroTag) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.blue[600],
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Text('用户拍摄图', style: TextStyle(color: Colors.white, fontSize: 12)),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _imagePanel(
+            context: context,
+            imageWidget: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => FullscreenImagePage(
+                      imageUrl: imagePath,
+                      heroTag: heroTag,
+                    ),
+                  ),
+                );
+              },
+              child: Hero(
+                tag: heroTag,
+                child: _buildImage(imagePath),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 图片容器面板：统一封装边框与圆角风格
+  Widget _imagePanel({required BuildContext context, required Widget imageWidget}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: imageWidget,
+      ),
+    );
+  }
+
+  /// 加载中面板占位
+  Widget _loadingPanel() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          SizedBox(width: 32, height: 32, child: CircularProgressIndicator()),
+          SizedBox(height: 8),
+          Text('样式图加载中...', style: TextStyle(color: Colors.black54, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  /// 空面板占位
+  Widget _emptyPanel(String text) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.image_not_supported, size: 48, color: Colors.grey[400]),
+          const SizedBox(height: 8),
+          Text(text, style: const TextStyle(color: Colors.black45, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  /// 破损图片占位图
+  Widget _brokenImagePlaceholder() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.broken_image, size: 48, color: Colors.orange),
+          SizedBox(height: 8),
+          Text('图片加载失败', style: TextStyle(color: Colors.black45, fontSize: 12)),
+        ],
+      ),
     );
   }
 }
