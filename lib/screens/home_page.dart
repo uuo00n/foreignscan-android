@@ -257,6 +257,7 @@ class HomePage extends ConsumerWidget {
                         scene: selectedScene,
                         onCaptureClick: () => _navigateToCamera(context, ref),
                         onConfirmTransfer: () => _confirmTransfer(context, ref),
+                        onTransferAll: () => _transferAll(context, ref), // 中文注释：新增“全部传输”入口，触发批量传输逻辑
                         referenceImageUrl: refImageAsync.maybeWhen(
                           data: (v) => v,
                           orElse: () => null,
@@ -448,5 +449,137 @@ class HomePage extends ConsumerWidget {
         );
       }
     }
+  }
+
+  /// 批量传输：对所有“已拍摄且未传输”的场景执行图片传输
+  /// 交互流程：
+  /// 1) 弹出确认框“是否全部传输？”；
+  /// 2) 用户确认后，显示带进度条的对话框，逐个场景执行传输；
+  /// 3) 每个场景成功后添加检测记录并标记 isTransferred=true；
+  /// 4) 完成后弹出汇总提示（成功/失败数量）。
+  Future<void> _transferAll(BuildContext context, WidgetRef ref) async {
+    final homeViewModel = ref.read(homeViewModelProvider.notifier);
+    final homeState = ref.read(homeViewModelProvider);
+
+    // 选择目标：已拍摄且未传输的场景
+    final targets = homeState.scenes.where((s) => s.capturedImage != null && !s.isTransferred).toList();
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('没有需要传输的场景'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // 确认对话框
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('确认全部传输'),
+        content: Text('将对 ${targets.length} 个未传输且已拍摄的场景进行图片传输，是否继续？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // 进度对话框 + 异步循环，逐一上传并刷新进度
+    int completed = 0;
+    int failed = 0;
+    bool started = false; // 防止重复启动
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            if (!started) {
+              started = true;
+              // 在首帧后启动上传循环，避免阻塞构建
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                final wifiService = ref.read(wifiServiceProvider);
+                for (final scene in targets) {
+                  try {
+                    final result = await wifiService.uploadImageFromCamera(
+                      scene.capturedImage!,
+                      sceneId: scene.id,
+                    );
+                    if (result != null) {
+                      // 构建完整图片URL（如果后端返回相对路径）
+                      final wifiSvc = ref.read(wifiServiceProvider);
+                      final String imageId = (result['imageId']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString());
+                      final String relativePath = (result['path']?.toString() ?? result['accessPath']?.toString() ?? '');
+                      String fullUrl = relativePath;
+                      if (relativePath.isNotEmpty) {
+                        final String base = wifiSvc.serverAddress; // 不包含 /api
+                        final String normalizedRel = relativePath.startsWith('/') ? relativePath : '/$relativePath';
+                        final String normalizedBase = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+                        fullUrl = '$normalizedBase$normalizedRel';
+                      }
+
+                      final newRecord = InspectionRecord(
+                        id: imageId,
+                        sceneName: scene.name,
+                        imagePath: fullUrl.isNotEmpty ? fullUrl : scene.capturedImage!,
+                        timestamp: DateTime.now(),
+                        status: '已上传',
+                      );
+                      await homeViewModel.addInspectionRecord(newRecord);
+                      await homeViewModel.updateSceneTransferStatus(scene.id, true);
+
+                      completed++;
+                    } else {
+                      failed++;
+                    }
+                  } catch (e) {
+                    failed++;
+                  }
+                  setState(() {}); // 刷新进度条
+                }
+
+                // 关闭进度对话框并提示结果
+                if (dialogCtx.mounted) {
+                  Navigator.of(dialogCtx).pop();
+                }
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('全部传输完成：成功 $completed，失败 $failed'),
+                      backgroundColor: failed == 0 ? Colors.green : Colors.orange,
+                    ),
+                  );
+                }
+              });
+            }
+
+            final progress = targets.isEmpty ? 0.0 : (completed / targets.length);
+            return AlertDialog(
+              title: const Text('正在全部传输'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(value: progress),
+                  const SizedBox(height: 12),
+                  Text('进度：$completed/${targets.length}')
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

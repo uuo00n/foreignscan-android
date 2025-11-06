@@ -8,6 +8,7 @@ class SceneDisplay extends StatelessWidget {
   final SceneData scene;
   final VoidCallback onCaptureClick;
   final VoidCallback onConfirmTransfer;
+  final VoidCallback? onTransferAll; // 中文注释：新增“全部传输”按钮回调，父组件实现批量传输逻辑
   final String? referenceImageUrl; // 模板参考图URL（来自后端样式图接口）
   final bool isReferenceLoading; // 模板参考图加载中标记（用于展示加载动画）
 
@@ -16,12 +17,20 @@ class SceneDisplay extends StatelessWidget {
     required this.scene,
     required this.onCaptureClick,
     required this.onConfirmTransfer,
+    this.onTransferAll,
     this.referenceImageUrl,
     this.isReferenceLoading = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // 中文注释：统一两个操作按钮的公共样式，避免尺寸不一致（统一最小尺寸与内边距）
+    final ButtonStyle commonButtonStyle = ElevatedButton.styleFrom(
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      minimumSize: const Size(140, 44), // 统一最小宽高，避免大小不一致
+    );
+
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -78,18 +87,33 @@ class SceneDisplay extends StatelessWidget {
             ),
           ),
           SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton.icon(
-              onPressed: onConfirmTransfer,
-              icon: Icon(scene.isTransferred ? Icons.refresh : Icons.check_circle),
-              label: Text(scene.isTransferred ? '重新传输' : '确认传输'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: scene.isTransferred ? Colors.orange : Colors.blue,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          // 中文注释：操作按钮行（右对齐）：左侧“全部传输”，右侧“确认/重新传输”
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (onTransferAll != null) ...[
+                ElevatedButton.icon(
+                  onPressed: onTransferAll,
+                  icon: const Icon(Icons.cloud_upload),
+                  label: const Text('全部传输'),
+                  style: commonButtonStyle.copyWith(
+                    // 中文注释：仅改变背景色，其他尺寸样式保持一致
+                    backgroundColor: MaterialStateProperty.all(Colors.purple),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              ElevatedButton.icon(
+                onPressed: onConfirmTransfer,
+                icon: Icon(scene.isTransferred ? Icons.refresh : Icons.check_circle),
+                label: Text(scene.isTransferred ? '重新传输' : '确认传输'),
+                style: commonButtonStyle.copyWith(
+                  backgroundColor: MaterialStateProperty.all(
+                    scene.isTransferred ? Colors.orange : Colors.blue,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
