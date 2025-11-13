@@ -1,21 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/models/detection_result.dart';
 import 'package:foreignscan/models/verification_record.dart';
 import 'package:foreignscan/widgets/verification_list.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
 import 'package:foreignscan/core/widgets/app_bar_actions.dart';
+import 'package:foreignscan/core/services/detection_service.dart';
 
-class DetectionResultScreen extends StatefulWidget {
+class DetectionResultScreen extends ConsumerStatefulWidget {
   final DetectionResultArguments? arguments;
   
   const DetectionResultScreen({super.key, this.arguments});
   
   @override
-  State<DetectionResultScreen> createState() => _DetectionResultScreenState();
+  ConsumerState<DetectionResultScreen> createState() => _DetectionResultScreenState();
 }
 
-class _DetectionResultScreenState extends State<DetectionResultScreen> {
-  late DetectionResult currentResult;
+class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
+  DetectionResult? currentResult;
+  List<DetectionIssue> imageIssues = const [];
+  List<DetectionResult> detectionList = const [];
+  bool isLoading = true;
+  String? errorMessage;
   
   // UI 常量
   static const double _imageWidth = 600.0;
@@ -34,121 +40,74 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
 
   void _loadData() {
     final args = widget.arguments;
-    currentResult = args != null 
-        ? _createResultFromArguments(args)
-        : _createMockDetectionResult();
+    // 中文注释：根据是否传入 imageId 决定调用哪个真实接口
+    if (args?.imageId != null && args!.imageId!.isNotEmpty) {
+      _fetchIssuesByImage(args.imageId!);
+      return;
+    }
+    _fetchDetectionList();
   }
 
-  DetectionResult _createResultFromArguments(DetectionResultArguments args) {
-    return DetectionResult(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      sceneName: args.imagePath.isNotEmpty ? '检测结果' : '未知场景',
-      imagePath: args.imagePath,
-      timestamp: DateTime.now(),
-      status: DetectionStatus.completed,
-      detectionType: args.detectionType,
-      issues: _createIssuesFromDetectionResults(args.detectionResults),
-    );
+  Future<void> _fetchDetectionList() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+      currentResult = null;
+      imageIssues = const [];
+    });
+
+    try {
+      final service = ref.read(detectionServiceProvider);
+      final list = await service.getDetectionResults();
+      if (list.isEmpty) {
+        setState(() {
+          isLoading = false;
+        });
+        return; // 中文注释：无数据直接走空态
+      }
+      setState(() {
+        detectionList = list;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = e.toString();
+        isLoading = false;
+      });
+    }
   }
 
-  DetectionResult _createMockDetectionResult() {
-    return DetectionResult(
-      id: '001',
-      sceneName: '管道闸口',
-      imagePath: 'assets/mock_detection_image.jpg',
-      timestamp: DateTime.now(),
-      status: DetectionStatus.completed,
-      issues: _createMockIssues(),
-    );
-  }
+  Future<void> _fetchIssuesByImage(String imageId) async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+      currentResult = null;
+      imageIssues = const [];
+    });
 
-  List<DetectionIssue> _createIssuesFromDetectionResults(Map<String, dynamic>? results) {
-    // 这里应该根据实际的检测结果生成问题列表
-    // 暂时返回模拟数据
-    return [
-      DetectionIssue(
-        id: 'issue_1',
-        type: IssueType.foreignObject,
-        description: '检测到金属异物',
-        x: 0.6,
-        y: 0.4,
-        width: 0.08,
-        height: 0.08,
-        severity: IssueSeverity.high,
-      ),
-      DetectionIssue(
-        id: 'issue_2',
-        type: IssueType.foreignObject,
-        description: '检测到异物',
-        x: 0.3,
-        y: 0.7,
-        width: 0.06,
-        height: 0.06,
-        severity: IssueSeverity.medium,
-      ),
-    ];
-  }
-
-  List<DetectionIssue> _createMockIssues() {
-    return [
-      DetectionIssue(
-        id: 'issue_1',
-        type: IssueType.foreignObject,
-        description: '检测到金属异物',
-        x: 0.6,
-        y: 0.4,
-        width: 0.08,
-        height: 0.08,
-        severity: IssueSeverity.high,
-      ),
-      DetectionIssue(
-        id: 'issue_2',
-        type: IssueType.foreignObject,
-        description: '检测到异物',
-        x: 0.3,
-        y: 0.7,
-        width: 0.06,
-        height: 0.06,
-        severity: IssueSeverity.medium,
-      ),
-    ];
-  }
-
-  List<VerificationRecord> _createMockVerificationRecords() {
-    return [
-      VerificationRecord(
-        id: '001',
-        sceneName: '管道闸口',
-        imagePath: '',
-        timestamp: DateTime(2025, 7, 11, 14, 30),
-        status: 'verified',
-        verificationResult: 'normal',
-      ),
-      VerificationRecord(
-        id: '002',
-        sceneName: '主承轴区域',
-        imagePath: '',
-        timestamp: DateTime(2025, 7, 11, 14, 30),
-        status: 'verified',
-        verificationResult: 'abnormal',
-      ),
-      VerificationRecord(
-        id: '003',
-        sceneName: '冷却系统出口',
-        imagePath: '',
-        timestamp: DateTime(2025, 7, 11, 14, 30),
-        status: 'verified',
-        verificationResult: 'normal',
-      ),
-      VerificationRecord(
-        id: '004',
-        sceneName: '传动轴检测点',
-        imagePath: '',
-        timestamp: DateTime(2025, 7, 11, 14, 30),
-        status: 'verified',
-        verificationResult: 'normal',
-      ),
-    ];
+    try {
+      final service = ref.read(detectionServiceProvider);
+      final issues = await service.getDetectionsByImage(imageId);
+      setState(() {
+        imageIssues = issues;
+        // 中文注释：若路由携带 imagePath，用其作为展示背景
+        currentResult = DetectionResult(
+          id: imageId,
+          sceneName: '检测结果',
+          imagePath: widget.arguments?.imagePath ?? '',
+          timestamp: DateTime.now(),
+          issues: issues,
+          status: DetectionStatus.completed,
+          detectionType: widget.arguments?.detectionType,
+        );
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = e.toString();
+        isLoading = false;
+      });
+    }
   }
 
   @override
@@ -169,7 +128,8 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
             // 右侧核查记录列表
             Expanded(
               flex: 1,
-              child: VerificationList(records: _createMockVerificationRecords()),
+              // 中文注释：根据左侧选择的检测项，在核查记录中展示其信息与缩略图
+              child: VerificationList(records: _buildVerificationRecords()),
             ),
           ],
         ),
@@ -180,53 +140,69 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       leading: AppBarBackButton(),
-      title: const AppBarTitle(title: '智能防异物检测系统'),
-      actions: [
-        AppBarActions(
-          onNewDetectionPressed: () => Navigator.pop(context),
-          onDetectionResultsPressed: () {
-            // 当前已经在检测结果页面，可以显示提示或刷新
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('当前已在检测结果页面'),
-                backgroundColor: Colors.blue,
-              ),
-            );
-          },
-        ),
-      ],
+      title: const AppBarTitle(title: '检测结果'),
     );
   }
 
   Widget _buildDetectionResultArea() {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (errorMessage != null) {
+      return Center(
+        child: Text(
+          '加载失败：$errorMessage',
+          style: const TextStyle(color: Colors.red),
+        ),
+      );
+    }
+
+    final isDetailMode = widget.arguments?.imageId != null && widget.arguments!.imageId!.isNotEmpty;
+    if (isDetailMode) {
+      final hasDetail = (currentResult != null && currentResult!.issues.isNotEmpty) || imageIssues.isNotEmpty;
+      if (!hasDetail) {
+        return Center(
+          child: Text(
+            '暂无数据',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey),
+          ),
+        );
+      }
+      return _buildDetectionDetailView();
+    }
+
+    if (detectionList.isEmpty) {
+      return Center(
+        child: Text(
+          '暂无数据',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey),
+        ),
+      );
+    }
+    return _buildDetectionListView();
+  }
+
+  Widget _buildDetectionDetailView() {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '问题：${currentResult.id} - ${currentResult.sceneName}',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            '问题：${currentResult?.id ?? ''} - ${currentResult?.sceneName ?? ''}',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           SizedBox(height: 16),
           Expanded(
             child: Stack(
               children: [
-                // 检测图片
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
@@ -238,24 +214,11 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
                     borderRadius: BorderRadius.circular(8),
                     child: AspectRatio(
                       aspectRatio: 4 / 3,
-                      child: Container(
-                        color: Colors.grey[300],
-                        child: Center(
-                          child: Text(
-                            '检测图片\n(模拟工业设备检测图)',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ),
+                      child: _buildImageOrPlaceholder(currentResult?.imagePath ?? ''),
                     ),
                   ),
                 ),
-                // 检测框标注
-                ...currentResult.issues.map((issue) => _buildDetectionBox(issue)),
+                ...((currentResult?.issues ?? imageIssues)).map((issue) => _buildDetectionBox(issue)),
               ],
             ),
           ),
@@ -264,29 +227,106 @@ class _DetectionResultScreenState extends State<DetectionResultScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '检测到 ${currentResult.issues.length} 个问题',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
+                '检测到 ${(currentResult?.issues.length ?? imageIssues.length)} 个问题',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               ),
               ElevatedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('确认核查完成')),
-                  );
-                },
+                onPressed: () {},
                 icon: Icon(Icons.check_circle),
                 label: Text('确认核查'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  // 中文注释：将当前选择的检测结果转换为核查记录列表（单条）
+  List<VerificationRecord> _buildVerificationRecords() {
+    final selected = currentResult;
+    if (selected == null) return [];
+    final count = (selected.metadata?['objectCount'] as int?) ?? selected.issues.length;
+    final result = count > 0 ? '异常' : '已确认';
+    return [
+      VerificationRecord(
+        id: selected.id,
+        sceneName: '模型：${selected.detectionType ?? ''}',
+        imagePath: selected.imagePath,
+        timestamp: selected.timestamp,
+        status: '已检测',
+        verificationResult: result,
+      )
+    ];
+  }
+
+  Widget _buildDetectionListView() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+        ],
+      ),
+      child: ListView.separated(
+        itemCount: detectionList.length,
+        separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[300]),
+        itemBuilder: (context, index) {
+          final item = detectionList[index];
+          final count = (item.metadata?['objectCount'] as int?) ?? item.issues.length;
+          return ListTile(
+            contentPadding: EdgeInsets.all(12),
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: SizedBox(
+                width: 80,
+                height: 60,
+                child: _buildImageOrPlaceholder(item.imagePath),
+              ),
+            ),
+            title: Text(item.id, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('对象数：$count · 模型：${item.detectionType ?? ''}'),
+            onTap: () {
+              setState(() {
+                currentResult = item;
+                imageIssues = item.issues;
+              });
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  // 中文注释：根据是否存在图片URL/路径显示图片；为空时显示占位“暂无数据”
+  Widget _buildImageOrPlaceholder(String path) {
+    if (path.isEmpty) {
+      return Container(
+        color: Colors.grey[300],
+        child: Center(
+          child: Text(
+            '暂无数据',
+            style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          ),
+        ),
+      );
+    }
+    return Image.network(
+      path,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) {
+        return Container(
+          color: Colors.grey[300],
+          child: Center(
+            child: Text(
+              '图片加载失败',
+              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+            ),
+          ),
+        );
+      },
     );
   }
 

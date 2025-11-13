@@ -1,10 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
+import 'package:dio/dio.dart';
 import 'package:foreignscan/models/detection_result.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 
 final detectionServiceProvider = Provider<DetectionService>((ref) {
-  return DetectionService(ref.read(loggerProvider));
+  // 中文注释：注入 Logger 与 Dio，Dio 的 baseUrl 已在全局配置为包含 /api 前缀
+  return DetectionService(
+    ref.read(loggerProvider),
+    ref.read(dioProvider),
+  );
 });
 
 final detectionResultsProvider = FutureProvider<List<DetectionResult>>((ref) async {
@@ -16,23 +21,90 @@ final currentDetectionProvider = StateProvider<DetectionResult?>((ref) => null);
 
 class DetectionService {
   final Logger _logger;
+  final Dio _dio;
 
-  DetectionService(this._logger);
+  DetectionService(this._logger, this._dio);
 
   Future<List<DetectionResult>> getDetectionResults() async {
     try {
       _logger.d('获取检测结果列表');
-      
-      // TODO: 实现实际的API调用
-      // final response = await _dio.get('/api/detection-results');
-      // return (response.data as List)
-      //     .map((json) => DetectionResult.fromJson(json))
-      //     .toList();
-      
-      // 模拟数据
-      return _generateMockDetectionResults();
+
+      // 中文注释：调用后端真实接口 /api/detections（baseUrl 已包含 /api）
+      final response = await _dio.get('/detections');
+
+      // 中文注释：兼容后端不同返回结构（数组或包裹在 data/detections 字段中）
+      final data = response.data;
+      List<dynamic> list;
+      if (data is List) {
+        list = data;
+      } else if (data is Map && data['detections'] is List) {
+        list = data['detections'] as List<dynamic>;
+      } else if (data is Map && data['data'] is List) {
+        list = data['data'] as List<dynamic>;
+      } else {
+        // 中文注释：不符合预期时返回空列表，避免崩溃
+        _logger.w('检测结果返回结构未知，按空列表处理');
+        return const [];
+      }
+
+      return list.map((raw) {
+        final Map<String, dynamic> json = raw as Map<String, dynamic>;
+        // 中文注释：后端 detections 结构与前端模型不一致，这里进行适配映射
+        final id = (json['id']?.toString() ?? '');
+        final createdAt = json['createdAt']?.toString();
+        final timestamp = createdAt != null ? DateTime.tryParse(createdAt) ?? DateTime.now() : DateTime.now();
+        final items = (json['items'] as List?) ?? const [];
+
+        // 图片URL优先使用 processedPath（服务端已绘制框），否则使用 sourcePath
+        String rel = (json['processedPath']?.toString() ?? json['sourcePath']?.toString() ?? '').trim();
+        rel = rel.replaceAll('\\', '/');
+        final rootBase = _dio.options.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+        final imageUrl = rel.isNotEmpty
+            ? _joinUrl(rootBase, rel)
+            : '';
+
+        // 将 items 映射为 issues（坐标信息缺少原图尺寸，这里不绘制框，将尺寸设为0，仅用于数量与列表展示）
+        final List<DetectionIssue> issues = items.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final item = entry.value as Map<String, dynamic>;
+          final cls = item['class']?.toString() ?? 'unknown';
+          final conf = (item['confidence'] is num) ? (item['confidence'] as num).toDouble() : null;
+          return DetectionIssue(
+            id: 'item_${id}_$idx',
+            type: IssueType.unknown,
+            description: '检测到对象: $cls',
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+            severity: _severityFromConfidence(conf),
+            confidence: conf,
+            metadata: item,
+          );
+        }).toList();
+
+        return DetectionResult(
+          id: id,
+          sceneName: '',
+          imagePath: imageUrl,
+          timestamp: timestamp,
+          issues: issues,
+          status: DetectionStatus.completed,
+          detectionType: json['modelName']?.toString(),
+          confidence: (json['summary'] is Map && (json['summary']['avgScore'] is num))
+              ? (json['summary']['avgScore'] as num).toDouble()
+              : null,
+          metadata: {
+            'objectCount': items.length,
+            'processedPath': json['processedPath'],
+            'sourcePath': json['sourcePath'],
+            'sceneId': json['sceneId'],
+          },
+        );
+      }).toList();
     } catch (e, stackTrace) {
       _logger.e('获取检测结果失败', error: e, stackTrace: stackTrace);
+      // 中文注释：失败时抛出异常，调用方按错误态处理
       throw Exception('获取检测结果失败: $e');
     }
   }
@@ -40,17 +112,103 @@ class DetectionService {
   Future<DetectionResult> getDetectionResult(String resultId) async {
     try {
       _logger.d('获取检测结果详情: $resultId');
-      
-      // TODO: 实现实际的API调用
-      // final response = await _dio.get('/api/detection-results/$resultId');
-      // return DetectionResult.fromJson(response.data);
-      
-      // 模拟数据
-      return _generateMockDetectionResults().first;
+
+      // 中文注释：若后端提供按 ID 查询的接口，则调用；否则由上层改为按 imageId 查询
+      final response = await _dio.get('/detections/$resultId');
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return DetectionResult.fromJson(data);
+      }
+      throw Exception('返回结构异常');
     } catch (e, stackTrace) {
       _logger.e('获取检测结果详情失败', error: e, stackTrace: stackTrace);
       throw Exception('获取检测结果详情失败: $e');
     }
+  }
+
+  // 中文注释：按图片ID获取该图片的检测详情列表
+  Future<List<DetectionIssue>> getDetectionsByImage(String imageId) async {
+    try {
+      _logger.d('按图片查询检测详情: imageId=$imageId');
+
+      final response = await _dio.get('/images/$imageId/detections');
+      final data = response.data;
+
+      List<dynamic> list;
+      if (data is List) {
+        list = data;
+      } else if (data is Map && data['detections'] is List) {
+        list = data['detections'] as List<dynamic>;
+      } else if (data is Map && data['data'] is List) {
+        list = data['data'] as List<dynamic>;
+      } else {
+        _logger.w('图片检测详情返回结构未知，按空列表处理');
+        return const [];
+      }
+
+      final List<DetectionIssue> issues = [];
+      for (final raw in list) {
+        final Map<String, dynamic> json = raw as Map<String, dynamic>;
+        if (json['items'] is List) {
+          final List items = json['items'] as List;
+          for (final it in items) {
+            final Map<String, dynamic> item = it as Map<String, dynamic>;
+            final bbox = item['bbox'] as Map<String, dynamic>?;
+            final conf = (item['confidence'] is num) ? (item['confidence'] as num).toDouble() : null;
+            issues.add(
+              DetectionIssue(
+                id: item['id']?.toString() ?? '',
+                type: IssueType.unknown,
+                description: '检测到对象: ${item['class'] ?? 'unknown'}',
+                x: (bbox?['x'] is num) ? (bbox!['x'] as num).toDouble() : 0,
+                y: (bbox?['y'] is num) ? (bbox!['y'] as num).toDouble() : 0,
+                width: (bbox?['width'] is num) ? (bbox!['width'] as num).toDouble() : 0,
+                height: (bbox?['height'] is num) ? (bbox!['height'] as num).toDouble() : 0,
+                severity: _severityFromConfidence(conf),
+                confidence: conf,
+                metadata: item,
+              ),
+            );
+          }
+        } else {
+          final bbox = json['bbox'] as Map<String, dynamic>?;
+          final conf = (json['confidence'] is num) ? (json['confidence'] as num).toDouble() : null;
+          issues.add(
+            DetectionIssue(
+              id: json['id']?.toString() ?? '',
+              type: IssueType.unknown,
+              description: '检测到对象: ${json['class'] ?? 'unknown'}',
+              x: (bbox?['x'] is num) ? (bbox!['x'] as num).toDouble() : 0,
+              y: (bbox?['y'] is num) ? (bbox!['y'] as num).toDouble() : 0,
+              width: (bbox?['width'] is num) ? (bbox!['width'] as num).toDouble() : 0,
+              height: (bbox?['height'] is num) ? (bbox!['height'] as num).toDouble() : 0,
+              severity: _severityFromConfidence(conf),
+              confidence: conf,
+              metadata: json,
+            ),
+          );
+        }
+      }
+      return issues;
+    } catch (e, stackTrace) {
+      _logger.e('按图片查询检测详情失败', error: e, stackTrace: stackTrace);
+      throw Exception('按图片查询检测详情失败: $e');
+    }
+  }
+
+  // 中文注释：根据置信度映射严重程度
+  IssueSeverity _severityFromConfidence(double? conf) {
+    if (conf == null) return IssueSeverity.medium;
+    if (conf >= 0.8) return IssueSeverity.high;
+    if (conf >= 0.5) return IssueSeverity.medium;
+    return IssueSeverity.low;
+  }
+
+  // 中文注释：将根地址与相对路径拼接为完整URL
+  String _joinUrl(String base, String relative) {
+    final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final r = relative.startsWith('/') ? relative : '/$relative';
+    return '$b$r';
   }
 
   Future<DetectionResult> performDetection({
@@ -60,18 +218,8 @@ class DetectionService {
   }) async {
     try {
       _logger.d('执行检测: $detectionType, 图片: $imagePath');
-      
-      // TODO: 实现实际的检测API调用
-      // final formData = FormData.fromMap({
-      //   'image': await MultipartFile.fromFile(imagePath),
-      //   'detectionType': detectionType,
-      //   'sceneName': sceneName,
-      // });
-      // 
-      // final response = await _dio.post('/api/detect', data: formData);
-      // return DetectionResult.fromJson(response.data);
-      
-      // 模拟检测结果
+
+      // 中文注释：如需实时检测接口，可按后端定义改造；此方法暂保留（真实项目中一般由服务端异步生成检测结果）
       return _generateMockDetectionResult(
         imagePath: imagePath,
         detectionType: detectionType,
@@ -86,12 +234,9 @@ class DetectionService {
   Future<void> updateDetectionResult(DetectionResult result) async {
     try {
       _logger.d('更新检测结果: ${result.id}');
-      
-      // TODO: 实现实际的API调用
-      // await _dio.put('/api/detection-results/${result.id}', data: result.toJson());
-      
-      // 模拟更新成功
-      await Future.delayed(const Duration(milliseconds: 500));
+
+      // 中文注释：如后端提供更新接口，按需启用；这里暂不调用以避免误写
+      await Future.delayed(const Duration(milliseconds: 200));
     } catch (e, stackTrace) {
       _logger.e('更新检测结果失败', error: e, stackTrace: stackTrace);
       throw Exception('更新检测结果失败: $e');
@@ -101,19 +246,16 @@ class DetectionService {
   Future<void> deleteDetectionResult(String resultId) async {
     try {
       _logger.d('删除检测结果: $resultId');
-      
-      // TODO: 实现实际的API调用
-      // await _dio.delete('/api/detection-results/$resultId');
-      
-      // 模拟删除成功
-      await Future.delayed(const Duration(milliseconds: 500));
+
+      // 中文注释：如后端提供删除接口，按需启用；这里暂不调用以避免误删
+      await Future.delayed(const Duration(milliseconds: 200));
     } catch (e, stackTrace) {
       _logger.e('删除检测结果失败', error: e, stackTrace: stackTrace);
       throw Exception('删除检测结果失败: $e');
     }
   }
 
-  // 模拟数据生成方法
+  // 模拟数据生成方法（保留以便离线调试）
   List<DetectionResult> _generateMockDetectionResults() {
     return [
       _generateMockDetectionResult(

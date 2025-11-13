@@ -9,11 +9,13 @@ class DetectionResultArguments {
   final String imagePath;
   final String detectionType;
   final Map<String, dynamic>? detectionResults;
+  final String? imageId; // 中文注释：新增图片ID，用于按图片查询详细检测结果
   
   const DetectionResultArguments({
     required this.imagePath,
     required this.detectionType,
     this.detectionResults,
+    this.imageId,
   });
 }
 

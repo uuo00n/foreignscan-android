@@ -36,11 +36,11 @@ class VerificationList extends StatelessWidget {
             ),
           ),
           SizedBox(height: 16),
-          Expanded(
+  Expanded(
             child: records.isEmpty
                 ? Center(
                     child: Text(
-                      '暂无核查记录',
+                      '请先选择一个实体',
                       style: TextStyle(
                         color: Colors.grey,
                         fontSize: 16,
@@ -50,7 +50,7 @@ class VerificationList extends StatelessWidget {
                 : ListView.builder(
                     itemCount: records.length,
                     itemBuilder: (context, index) {
-                      return _buildRecordCard(records[index]);
+                      return _buildRecordCard(context, records[index]);
                     },
                   ),
           ),
@@ -59,78 +59,94 @@ class VerificationList extends StatelessWidget {
     );
   }
 
-  Widget _buildRecordCard(VerificationRecord record) {
+  // 中文注释：渲染核查记录卡片，左侧为缩略图，点击可全屏查看
+  Widget _buildRecordCard(BuildContext context, VerificationRecord record) {
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
-    
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.grey[50],
-      ),
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          // 左侧图片
-          Container(
+          SizedBox(
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
-              color: Colors.grey[800],
-              borderRadius: BorderRadius.circular(8),
-            ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Container(
-                color: Colors.grey[800],
-                child: Center(
-                  child: Icon(
-                    Icons.image,
-                    size: 32,
-                    color: Colors.orange,
+              child: GestureDetector(
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) {
+                      return Dialog(
+                        backgroundColor: Colors.black,
+                        insetPadding: EdgeInsets.zero,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: InteractiveViewer(
+                                minScale: 1.0,
+                                maxScale: 5.0,
+                                child: Image.network(
+                                  record.imagePath,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) => Center(
+                                    child: Text(
+                                      '图片加载失败',
+                                      style: TextStyle(color: Colors.white70),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 16,
+                              right: 16,
+                              child: IconButton(
+                                icon: Icon(Icons.close, color: Colors.white),
+                                onPressed: () => Navigator.of(context).pop(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+                child: Image.network(
+                  record.imagePath,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.grey[300],
+                    child: Center(
+                      child: Icon(
+                        Icons.broken_image,
+                        size: 28,
+                        color: Colors.orange,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
           SizedBox(width: 12),
-          // 右侧信息
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${record.id} - ${record.sceneName}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  '编号：${record.id}',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 SizedBox(height: 4),
+                Text(record.sceneName, style: TextStyle(fontSize: 13)),
+                SizedBox(height: 4),
                 Text(
-                  dateFormat.format(record.timestamp),
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
+                  '时间：${dateFormat.format(record.timestamp)}',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
                 ),
-                SizedBox(height: 8),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(record.verificationResult),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    record.verificationResult,
-                    style: TextStyle(
-                      color: _getStatusTextColor(record.verificationResult),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
+                SizedBox(height: 4),
+                Text('状态：${record.verificationResult}', style: TextStyle(fontSize: 12)),
               ],
             ),
           ),

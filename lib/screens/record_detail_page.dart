@@ -9,6 +9,8 @@ import 'package:foreignscan/core/services/style_image_service.dart';
 import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/models/style_image.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
+import 'package:foreignscan/core/services/detection_service.dart';
+import 'package:foreignscan/models/detection_result.dart';
 
 /// 拍摄记录详情页（对比图展示）
 /// 中文说明：
@@ -86,6 +88,9 @@ class RecordDetailPage extends ConsumerWidget {
                 ],
               ),
             ),
+            const SizedBox(height: 16),
+            // 检测详情面板（来自 /api/images/{imageId}/detections）
+            _buildDetectionDetailPanel(context, ref, record.id),
           ],
         ),
       ),
@@ -449,6 +454,84 @@ class RecordDetailPage extends ConsumerWidget {
           Icon(Icons.broken_image, size: 48, color: Colors.orange),
           SizedBox(height: 8),
           Text('图片加载失败', style: TextStyle(color: Colors.black45, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  /// 检测详情面板：按图片ID查询并展示检测问题列表
+  /// 中文注释：
+  /// - 无数据时显示“暂无数据”；
+  /// - 失败时显示错误提示；
+  /// - 列表展示每条问题的类型、严重程度与描述。
+  Widget _buildDetectionDetailPanel(BuildContext context, WidgetRef ref, String imageId) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.rule_folder, size: 18, color: Colors.blue),
+              const SizedBox(width: 6),
+              const Text('检测详情', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          FutureBuilder<List<DetectionIssue>>(
+            future: ref.read(detectionServiceProvider).getDetectionsByImage(imageId),
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator()),
+                );
+              }
+              if (snap.hasError) {
+                return Text('加载失败：${snap.error}', style: const TextStyle(color: Colors.red));
+              }
+              final issues = (snap.data ?? const <DetectionIssue>[]).whereType<DetectionIssue>().toList();
+              if (issues.isEmpty) {
+                return Text('暂无数据', style: TextStyle(color: Colors.grey[600]));
+              }
+              return Column(
+                children: issues.map((DetectionIssue issue) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: issue.severity.color,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '[${issue.type.displayName} · ${issue.severity.displayName}] ${issue.description}',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        () {
+                          final conf = issue.confidence;
+                          if (conf == null) return const SizedBox.shrink();
+                          return Text(
+                            '${(conf * 100).toStringAsFixed(0)}%',
+                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          );
+                        }(),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
         ],
       ),
     );
