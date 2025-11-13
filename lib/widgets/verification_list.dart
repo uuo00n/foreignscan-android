@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:intl/intl.dart';
 import '../models/verification_record.dart';
 
@@ -101,16 +102,7 @@ class VerificationList extends StatelessWidget {
                             child: InteractiveViewer(
                               minScale: 1.0,
                               maxScale: 5.0,
-                              child: Image.network(
-                                record.imagePath,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => Center(
-                                  child: Text(
-                                    '图片加载失败',
-                                    style: TextStyle(color: Colors.white70),
-                                  ),
-                                ),
-                              ),
+                              child: _buildImage(record.imagePath, fit: BoxFit.contain, errorTextColor: Colors.white70),
                             ),
                           ),
                           Positioned(
@@ -130,26 +122,41 @@ class VerificationList extends StatelessWidget {
               child: SizedBox(
                 width: double.infinity,
                 height: 140,
-                child: Image.network(
-                  record.imagePath,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.grey[300],
-                    child: Center(
-                      child: Icon(
-                        Icons.broken_image,
-                        size: 28,
-                        color: Colors.orange,
-                      ),
-                    ),
-                  ),
-                ),
+                child: _buildImage(record.imagePath, fit: BoxFit.cover),
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildImage(String path, {BoxFit fit = BoxFit.cover, Color? errorTextColor}) {
+    final bool isNetwork = path.startsWith('http://') || path.startsWith('https://');
+    final Widget error = Container(
+      color: Colors.grey[300],
+      child: Center(
+        child: Icon(
+          Icons.broken_image,
+          size: 28,
+          color: Colors.orange,
+        ),
+      ),
+    );
+    if (isNetwork) {
+      return Image.network(
+        path,
+        fit: fit,
+        errorBuilder: (_, __, ___) => error,
+      );
+    } else {
+      final file = File(path);
+      return Image.file(
+        file,
+        fit: fit,
+        errorBuilder: (_, __, ___) => error,
+      );
+    }
   }
 
   Color _getStatusColor(String status) {

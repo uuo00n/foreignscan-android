@@ -1,14 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:foreignscan/models/detection_result.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
+import 'package:foreignscan/core/services/local_cache_service.dart';
 
 final detectionServiceProvider = Provider<DetectionService>((ref) {
-  // 中文注释：注入 Logger 与 Dio，Dio 的 baseUrl 已在全局配置为包含 /api 前缀
+  // 中文注释：注入 Logger、Dio、SharedPreferences 与本地图片缓存服务
   return DetectionService(
     ref.read(loggerProvider),
     ref.read(dioProvider),
+    ref.watch(sharedPreferencesProvider.future),
+    ref.read(localCacheServiceProvider),
   );
 });
 
@@ -22,8 +26,12 @@ final currentDetectionProvider = StateProvider<DetectionResult?>((ref) => null);
 class DetectionService {
   final Logger _logger;
   final Dio _dio;
+  final Future<SharedPreferences> _prefs;
+  final LocalCacheService _cache;
 
-  DetectionService(this._logger, this._dio);
+  DetectionService(this._logger, this._dio, this._prefs, this._cache);
+
+  static const String _detectionsKey = 'detection_results_cache';
 
   Future<List<DetectionResult>> getDetectionResults() async {
     try {
@@ -107,6 +115,52 @@ class DetectionService {
       // 中文注释：失败时抛出异常，调用方按错误态处理
       throw Exception('获取检测结果失败: $e');
     }
+  }
+
+  /// 混合本地/网络的检测结果获取：
+  /// - 优先尝试网络；失败则回退到本地缓存
+  /// - 成功从网络获取后，下载并缓存图片到本地，更新本地缓存JSON
+  Future<List<DetectionResult>> getDetectionResultsHybrid({bool forceNetwork = false}) async {
+    try {
+      // 中文注释：尝试网络获取（forceNetwork仅用于调用方语义表达，失败仍自动回退本地）
+      final networkList = await getDetectionResults();
+
+      // 图片离线缓存：将 http/https 图片下载到本地并替换路径
+      List<DetectionResult> cachedList = networkList;
+      try {
+        cachedList = await _cache.cacheRecordImages<DetectionResult>(
+          records: networkList,
+          getImagePath: (r) => r.imagePath,
+          getIdOrKey: (r) => r.id.isNotEmpty ? r.id : r.timestamp.millisecondsSinceEpoch.toString(),
+          copyWithImagePath: (r, newPath) => r.copyWith(imagePath: newPath),
+        );
+      } catch (_) {
+        // 图片缓存失败不影响主流程
+      }
+
+      // 更新本地缓存（JSON）
+      await saveDetectionResults(cachedList);
+      return cachedList;
+    } catch (e) {
+      // 网络失败：读取本地缓存兜底
+      final local = await readDetectionResults();
+      if (local.isNotEmpty) return local;
+      // 若本地也没有，则抛出原始错误
+      throw Exception('获取检测结果失败(网络+本地均不可用): $e');
+    }
+  }
+
+  Future<void> saveDetectionResults(List<DetectionResult> list) async {
+    final prefs = await _prefs;
+    final json = DetectionResult.toJsonList(list);
+    await prefs.setString(_detectionsKey, json);
+  }
+
+  Future<List<DetectionResult>> readDetectionResults() async {
+    final prefs = await _prefs;
+    final json = prefs.getString(_detectionsKey);
+    if (json == null || json.isEmpty) return const <DetectionResult>[];
+    return DetectionResult.fromJsonList(json);
   }
 
   Future<DetectionResult> getDetectionResult(String resultId) async {

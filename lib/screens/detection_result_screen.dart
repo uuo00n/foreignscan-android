@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/models/detection_result.dart';
 import 'package:foreignscan/models/verification_record.dart';
@@ -48,7 +49,7 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
     _fetchDetectionList();
   }
 
-  Future<void> _fetchDetectionList() async {
+  Future<void> _fetchDetectionList({bool forceNetwork = false}) async {
     setState(() {
       isLoading = true;
       errorMessage = null;
@@ -58,7 +59,7 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
 
     try {
       final service = ref.read(detectionServiceProvider);
-      final list = await service.getDetectionResults();
+      final list = await service.getDetectionResultsHybrid(forceNetwork: forceNetwork);
       if (list.isEmpty) {
         setState(() {
           isLoading = false;
@@ -270,32 +271,51 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
-      child: ListView.separated(
-        itemCount: detectionList.length,
-        separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[300]),
-        itemBuilder: (context, index) {
-          final item = detectionList[index];
-          final count = (item.metadata?['objectCount'] as int?) ?? item.issues.length;
-          return ListTile(
-            contentPadding: EdgeInsets.all(12),
-            leading: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: SizedBox(
-                width: 80,
-                height: 60,
-                child: _buildImageOrPlaceholder(item.imagePath),
+      child: Column(
+        children: [
+          // 顶部同步按钮（混合本地/网络同步，离线展示本地缓存）
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: ElevatedButton.icon(
+                onPressed: () => _fetchDetectionList(forceNetwork: true),
+                icon: Icon(Icons.sync),
+                label: Text('同步'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
               ),
             ),
-            title: Text(item.id, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('对象数：$count · 模型：${item.detectionType ?? ''}'),
-            onTap: () {
-              setState(() {
-                currentResult = item;
-                imageIssues = item.issues;
-              });
-            },
-          );
-        },
+          ),
+          Expanded(
+            child: ListView.separated(
+              itemCount: detectionList.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[300]),
+              itemBuilder: (context, index) {
+                final item = detectionList[index];
+                final count = (item.metadata?['objectCount'] as int?) ?? item.issues.length;
+                return ListTile(
+                  contentPadding: EdgeInsets.all(12),
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      width: 80,
+                      height: 60,
+                      child: _buildImageOrPlaceholder(item.imagePath),
+                    ),
+                  ),
+                  title: Text(item.id, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('对象数：$count · 模型：${item.detectionType ?? ''}'),
+                  onTap: () {
+                    setState(() {
+                      currentResult = item;
+                      imageIssues = item.issues;
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -313,21 +333,30 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
         ),
       );
     }
-    return Image.network(
-      path,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) {
-        return Container(
-          color: Colors.grey[300],
-          child: Center(
-            child: Text(
-              '图片加载失败',
-              style: TextStyle(color: Colors.grey[600], fontSize: 16),
-            ),
-          ),
-        );
-      },
+    final bool isNetwork = path.startsWith('http://') || path.startsWith('https://');
+    final Widget error = Container(
+      color: Colors.grey[300],
+      child: Center(
+        child: Text(
+          '图片加载失败',
+          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+        ),
+      ),
     );
+    if (isNetwork) {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => error,
+      );
+    } else {
+      final file = File(path);
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => error,
+      );
+    }
   }
 
   Widget _buildDetectionBox(DetectionIssue issue) {
