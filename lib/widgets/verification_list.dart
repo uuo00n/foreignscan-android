@@ -63,55 +63,73 @@ class VerificationList extends StatelessWidget {
   Widget _buildRecordCard(BuildContext context, VerificationRecord record) {
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
+    // 中文注释：将文字信息置顶，图片在下方，占据整行宽度
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 80,
-            height: 80,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: GestureDetector(
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) {
-                      return Dialog(
-                        backgroundColor: Colors.black,
-                        insetPadding: EdgeInsets.zero,
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: InteractiveViewer(
-                                minScale: 1.0,
-                                maxScale: 5.0,
-                                child: Image.network(
-                                  record.imagePath,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => Center(
-                                    child: Text(
-                                      '图片加载失败',
-                                      style: TextStyle(color: Colors.white70),
-                                    ),
+          // 中文注释：顶部文字信息
+          Text(
+            '编号：${record.id}',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          SizedBox(height: 4),
+          Text(record.sceneName, style: TextStyle(fontSize: 13)),
+          SizedBox(height: 4),
+          Text(
+            '时间：${dateFormat.format(record.timestamp)}',
+            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+          ),
+          SizedBox(height: 4),
+          Text('状态：${record.verificationResult}', style: TextStyle(fontSize: 12)),
+          SizedBox(height: 8),
+          // 中文注释：下方拍摄图片，点击进入全屏预览
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: GestureDetector(
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (_) {
+                    return Dialog(
+                      backgroundColor: Colors.black,
+                      insetPadding: EdgeInsets.zero,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: InteractiveViewer(
+                              minScale: 1.0,
+                              maxScale: 5.0,
+                              child: Image.network(
+                                record.imagePath,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => Center(
+                                  child: Text(
+                                    '图片加载失败',
+                                    style: TextStyle(color: Colors.white70),
                                   ),
                                 ),
                               ),
                             ),
-                            Positioned(
-                              top: 16,
-                              right: 16,
-                              child: IconButton(
-                                icon: Icon(Icons.close, color: Colors.white),
-                                onPressed: () => Navigator.of(context).pop(),
-                              ),
+                          ),
+                          Positioned(
+                            top: 16,
+                            right: 16,
+                            child: IconButton(
+                              icon: Icon(Icons.close, color: Colors.white),
+                              onPressed: () => Navigator.of(context).pop(),
                             ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+              child: SizedBox(
+                width: double.infinity,
+                height: 140,
                 child: Image.network(
                   record.imagePath,
                   fit: BoxFit.cover,
@@ -127,27 +145,6 @@ class VerificationList extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '编号：${record.id}',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                SizedBox(height: 4),
-                Text(record.sceneName, style: TextStyle(fontSize: 13)),
-                SizedBox(height: 4),
-                Text(
-                  '时间：${dateFormat.format(record.timestamp)}',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                ),
-                SizedBox(height: 4),
-                Text('状态：${record.verificationResult}', style: TextStyle(fontSize: 12)),
-              ],
             ),
           ),
         ],
