@@ -57,14 +57,6 @@ class SceneSelector extends StatelessWidget {
             ),
           ),
           SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildPageButton(Icons.chevron_left, () {}),
-              SizedBox(width: 16),
-              _buildPageButton(Icons.chevron_right, () {}),
-            ],
-          ),
         ],
       ),
     );
