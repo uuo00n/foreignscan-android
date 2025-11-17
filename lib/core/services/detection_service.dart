@@ -250,6 +250,86 @@ class DetectionService {
     }
   }
 
+  /// 中文注释：按图片ID获取最新的一条检测结果摘要（包含模型、图片、summary等）
+  Future<DetectionResult?> getLatestDetectionByImage(String imageId) async {
+    try {
+      final response = await _dio.get('/images/$imageId/detections');
+      final data = response.data;
+      List<dynamic> list;
+      if (data is List) {
+        list = data;
+      } else if (data is Map && data['detections'] is List) {
+        list = data['detections'] as List<dynamic>;
+      } else if (data is Map && data['data'] is List) {
+        list = data['data'] as List<dynamic>;
+      } else {
+        return null;
+      }
+
+      if (list.isEmpty) return null;
+
+      // 选择最新一条（按 createdAt 排序，缺失时取第一条）
+      list.sort((a, b) {
+        final ma = a as Map<String, dynamic>;
+        final mb = b as Map<String, dynamic>;
+        final ta = DateTime.tryParse(ma['createdAt']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final tb = DateTime.tryParse(mb['createdAt']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return tb.compareTo(ta);
+      });
+      final json = list.first as Map<String, dynamic>;
+
+      final id = (json['id']?.toString() ?? imageId);
+      final createdAt = json['createdAt']?.toString();
+      final timestamp = createdAt != null ? DateTime.tryParse(createdAt) ?? DateTime.now() : DateTime.now();
+      final items = (json['items'] as List?) ?? const [];
+      String rel = (json['processedPath']?.toString() ?? json['sourcePath']?.toString() ?? '').trim().replaceAll('\\', '/');
+      final rootBase = _dio.options.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+      final imageUrl = rel.isNotEmpty ? _joinUrl(rootBase, rel) : '';
+
+      final List<DetectionIssue> issues = items.asMap().entries.map((entry) {
+        final item = entry.value as Map<String, dynamic>;
+        final bbox = item['bbox'] as Map<String, dynamic>?;
+        final conf = (item['confidence'] is num) ? (item['confidence'] as num).toDouble() : null;
+        return DetectionIssue(
+          id: 'item_${id}_${entry.key}',
+          type: IssueType.unknown,
+          description: '检测到对象: ${item['class'] ?? 'unknown'}',
+          x: (bbox?['x'] is num) ? (bbox!['x'] as num).toDouble() : 0,
+          y: (bbox?['y'] is num) ? (bbox!['y'] as num).toDouble() : 0,
+          width: (bbox?['width'] is num) ? (bbox!['width'] as num).toDouble() : 0,
+          height: (bbox?['height'] is num) ? (bbox!['height'] as num).toDouble() : 0,
+          severity: _severityFromConfidence(conf),
+          confidence: conf,
+          metadata: item,
+        );
+      }).toList();
+
+      return DetectionResult(
+        id: id,
+        sceneName: '',
+        imagePath: imageUrl,
+        timestamp: timestamp,
+        issues: issues,
+        status: DetectionStatus.completed,
+        detectionType: json['modelName']?.toString(),
+        confidence: (json['summary'] is Map && (json['summary']['avgScore'] is num))
+            ? (json['summary']['avgScore'] as num).toDouble()
+            : null,
+        metadata: {
+          'objectCount': items.length,
+          'processedPath': json['processedPath'],
+          'sourcePath': json['sourcePath'],
+          'sceneId': json['sceneId'],
+          'iouThreshold': json['iouThreshold'],
+          'confidenceThreshold': json['confidenceThreshold'],
+          'inferenceTimeMs': json['inferenceTimeMs'],
+        },
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   // 中文注释：根据置信度映射严重程度
   IssueSeverity _severityFromConfidence(double? conf) {
     if (conf == null) return IssueSeverity.medium;

@@ -50,11 +50,13 @@ class RecordDetailPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      // 中文注释：为避免内容占满全屏导致无法上下滚动，这里改为使用可滚动容器
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // 顶部标题与说明
             Row(
               children: [
@@ -72,8 +74,9 @@ class RecordDetailPage extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
-            // 对比图区域：左侧样式图（参考图） + 右侧用户图片
-            Expanded(
+            // 对比图区域：左侧样式图（参考图） + 右侧用户图片（限定高度，整体页面可上下滚动）
+            SizedBox(
+              height: 360,
               child: Row(
                 children: [
                   // 左侧：样式图
@@ -88,10 +91,14 @@ class RecordDetailPage extends ConsumerWidget {
                 ],
               ),
             ),
+          const SizedBox(height: 16),
+            // 中文注释：核查记录信息（从检测结果获取摘要）
+            _buildVerificationInfoPanel(context, ref, record.id),
             const SizedBox(height: 16),
             // 检测详情面板（来自 /api/images/{imageId}/detections）
             _buildDetectionDetailPanel(context, ref, record.id),
           ],
+          ),
         ),
       ),
     );
@@ -533,6 +540,101 @@ class RecordDetailPage extends ConsumerWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  /// 核查记录信息面板：展示模型、对象数、置信度、核查结果与缩略图
+  Widget _buildVerificationInfoPanel(BuildContext context, WidgetRef ref, String imageId) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: FutureBuilder<DetectionResult?>(
+        future: ref.read(detectionServiceProvider).getLatestDetectionByImage(imageId),
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const SizedBox(height: 40, child: Center(child: CircularProgressIndicator()));
+          }
+          final res = snap.data;
+          if (res == null) {
+            return Text('暂无数据', style: TextStyle(color: Colors.grey[600]));
+          }
+          final count = (res.metadata?['objectCount'] as int?) ?? res.issues.length;
+          final verification = count > 0 ? '异常' : '已确认';
+          final avg = res.confidence != null ? '${(res.confidence! * 100).toStringAsFixed(0)}%' : '-';
+          final iou = res.metadata?['iouThreshold']?.toString() ?? '-';
+          final thr = res.metadata?['confidenceThreshold']?.toString() ?? '-';
+          final ms = res.metadata?['inferenceTimeMs']?.toString() ?? '-';
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.fact_check, size: 18, color: Colors.teal),
+                  SizedBox(width: 6),
+                  Text('核查记录', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildInfoRow(Icons.confirmation_number, '编号', res.id),
+              const SizedBox(height: 6),
+              _buildInfoRow(Icons.model_training, '模型', res.detectionType ?? '-'),
+              const SizedBox(height: 6),
+              _buildInfoRow(Icons.category, '对象数量', '$count'),
+              const SizedBox(height: 6),
+              _buildInfoRow(Icons.speed, '平均置信度', avg),
+              const SizedBox(height: 6),
+              _buildInfoRow(Icons.filter_alt, 'IOU/阈值', '$iou / $thr'),
+              const SizedBox(height: 6),
+              _buildInfoRow(Icons.timer, '推理耗时(ms)', ms),
+              const SizedBox(height: 6),
+              _buildInfoRow(Icons.verified, '核查结果', verification),
+              const SizedBox(height: 8),
+              // 缩略图（点击全屏查看处理后图片）
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FullscreenImagePage(
+                        imageUrl: res.imagePath,
+                        heroTag: 'verify-thumb-${res.id}',
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  height: 140,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child: () {
+                    final path = res.imagePath;
+                    if (path.isNotEmpty && (path.startsWith('http://') || path.startsWith('https://'))) {
+                      return Image.network(path, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
+                      );
+                    }
+                    if (path.isNotEmpty) {
+                      final f = File(path);
+                      return Image.file(f, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
+                      );
+                    }
+                    return _brokenImagePlaceholder();
+                  }(),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
