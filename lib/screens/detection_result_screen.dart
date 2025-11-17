@@ -525,25 +525,34 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
                   itemBuilder: (context, index) {
                     final item = displayed[index];
                     final count = (item.metadata?['objectCount'] as int?) ?? item.issues.length;
-                    return ListTile(
-                      contentPadding: EdgeInsets.all(12),
-                      leading: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: SizedBox(
-                          width: 80,
-                          height: 60,
-                          child: _buildImageOrPlaceholder(item.imagePath),
-                        ),
-                      ),
-                      title: Text(item.id, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('对象数：$count · 模型：${item.detectionType ?? ''}'),
-                      onTap: () {
-                        setState(() {
-                          currentResult = item;
-                          imageIssues = item.issues;
-                        });
-                      },
-                    );
+                return ListTile(
+                  contentPadding: EdgeInsets.all(12),
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      width: 80,
+                      height: 60,
+                      child: _buildImageOrPlaceholder(item.imagePath),
+                    ),
+                  ),
+                  title: Text(item.id, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  // 中文注释：在ID下方显示场景名称，再显示对象数/模型信息
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('场景：${item.sceneName.isNotEmpty ? item.sceneName : '未知场景'}'),
+                      SizedBox(height: 2),
+                      Text('对象数：$count · 模型：${item.detectionType ?? ''}'),
+                    ],
+                  ),
+                  onTap: () {
+                    setState(() {
+                      currentResult = item;
+                      imageIssues = item.issues;
+                    });
+                  },
+                );
                   },
                 );
               },

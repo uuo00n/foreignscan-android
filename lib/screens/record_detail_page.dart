@@ -492,8 +492,8 @@ class RecordDetailPage extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 8),
-          FutureBuilder<List<DetectionIssue>>(
-            future: ref.read(detectionServiceProvider).getDetectionsByImage(imageId),
+          FutureBuilder<DetectionResult?>(
+            future: ref.read(detectionServiceProvider).getLatestDetectionByImage(imageId),
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
                 return const Padding(
@@ -504,35 +504,28 @@ class RecordDetailPage extends ConsumerWidget {
               if (snap.hasError) {
                 return Text('加载失败：${snap.error}', style: const TextStyle(color: Colors.red));
               }
-              final issues = (snap.data ?? const <DetectionIssue>[]).whereType<DetectionIssue>().toList();
+              final res = snap.data;
+              final issues = res?.issues ?? const <DetectionIssue>[];
               if (issues.isEmpty) {
                 return Text('暂无数据', style: TextStyle(color: Colors.grey[600]));
               }
               return Column(
-                children: issues.map((DetectionIssue issue) {
+                children: issues.map((issue) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.error_outline,
-                          color: issue.severity.color,
-                          size: 18,
-                        ),
+                        Icon(Icons.error_outline, color: issue.severity.color, size: 18),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            '[${issue.type.displayName} · ${issue.severity.displayName}] ${issue.description}',
-                            style: const TextStyle(fontSize: 14),
-                          ),
+                          child: Text('[${issue.type.displayName} · ${issue.severity.displayName}] ${issue.description}',
+                            style: const TextStyle(fontSize: 14)),
                         ),
                         () {
                           final conf = issue.confidence;
                           if (conf == null) return const SizedBox.shrink();
-                          return Text(
-                            '${(conf * 100).toStringAsFixed(0)}%',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                          );
+                          return Text('${(conf * 100).toStringAsFixed(0)}%',
+                            style: TextStyle(color: Colors.grey[600], fontSize: 12));
                         }(),
                       ],
                     ),

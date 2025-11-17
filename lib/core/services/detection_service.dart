@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:foreignscan/models/detection_result.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/services/local_cache_service.dart';
+import 'package:foreignscan/core/services/scene_service.dart';
 
 final detectionServiceProvider = Provider<DetectionService>((ref) {
   // 中文注释：注入 Logger、Dio、SharedPreferences 与本地图片缓存服务
@@ -13,6 +14,7 @@ final detectionServiceProvider = Provider<DetectionService>((ref) {
     ref.read(dioProvider),
     ref.watch(sharedPreferencesProvider.future),
     ref.read(localCacheServiceProvider),
+    ref.read(sceneServiceProvider),
   );
 });
 
@@ -28,8 +30,9 @@ class DetectionService {
   final Dio _dio;
   final Future<SharedPreferences> _prefs;
   final LocalCacheService _cache;
+  final SceneService _sceneService;
 
-  DetectionService(this._logger, this._dio, this._prefs, this._cache);
+  DetectionService(this._logger, this._dio, this._prefs, this._cache, this._sceneService);
 
   static const String _detectionsKey = 'detection_results_cache';
 
@@ -125,11 +128,29 @@ class DetectionService {
       // 中文注释：尝试网络获取（forceNetwork仅用于调用方语义表达，失败仍自动回退本地）
       final networkList = await getDetectionResults();
 
+      // 中文注释：为每条检测结果补充场景名称（通过 sceneId 映射）
+      List<DetectionResult> withScene = networkList;
+      try {
+        final scenes = await _sceneService.getScenes();
+        final Map<String, String> sceneNameById = {for (final s in scenes) s.id: s.name};
+        withScene = networkList.map((r) {
+          final rawSceneId = r.metadata?['sceneId'];
+          // 兼容后端不同 sceneId 结构（字符串或 {Hex: "..."}）
+          final sceneId = (rawSceneId is Map && rawSceneId['Hex'] != null)
+              ? rawSceneId['Hex'].toString()
+              : rawSceneId?.toString() ?? '';
+          final name = sceneNameById[sceneId] ?? '未知场景';
+          return r.copyWith(sceneName: name);
+        }).toList();
+      } catch (_) {
+        // 场景映射失败时保持原列表
+      }
+
       // 图片离线缓存：将 http/https 图片下载到本地并替换路径
-      List<DetectionResult> cachedList = networkList;
+      List<DetectionResult> cachedList = withScene;
       try {
         cachedList = await _cache.cacheRecordImages<DetectionResult>(
-          records: networkList,
+          records: withScene,
           getImagePath: (r) => r.imagePath,
           getIdOrKey: (r) => r.id.isNotEmpty ? r.id : r.timestamp.millisecondsSinceEpoch.toString(),
           copyWithImagePath: (r, newPath) => r.copyWith(imagePath: newPath),
