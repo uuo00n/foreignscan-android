@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/models/detection_result.dart';
 import 'package:foreignscan/models/verification_record.dart';
@@ -23,6 +24,9 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
   List<DetectionResult> detectionList = const [];
   bool isLoading = true;
   String? errorMessage;
+  DateTimeRange? _dateRange;
+  DateTime? _singleDay; // 中文注释：单日模式下选择的日期
+  bool _isSingleDayMode = false; // 中文注释：筛选模式（true=单日，false=范围）
   
   // UI 常量
   static const double _imageWidth = 600.0;
@@ -76,6 +80,166 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
         isLoading = false;
       });
     }
+  }
+
+  List<DetectionResult> _getDisplayedList() {
+    // 中文注释：优先使用单日筛选；否则使用范围筛选；都为空则返回原列表
+    if (_isSingleDayMode && _singleDay != null) {
+      final start = DateTime(_singleDay!.year, _singleDay!.month, _singleDay!.day);
+      final end = DateTime(_singleDay!.year, _singleDay!.month, _singleDay!.day, 23, 59, 59, 999);
+      return detectionList.where((r) {
+        final t = r.timestamp;
+        return (t.isAtSameMomentAs(start) || t.isAfter(start)) && (t.isAtSameMomentAs(end) || t.isBefore(end));
+      }).toList();
+    }
+    if (_dateRange != null) {
+      final start = DateTime(_dateRange!.start.year, _dateRange!.start.month, _dateRange!.start.day);
+      final end = DateTime(_dateRange!.end.year, _dateRange!.end.month, _dateRange!.end.day, 23, 59, 59, 999);
+      return detectionList.where((r) {
+        final t = r.timestamp;
+        return (t.isAtSameMomentAs(start) || t.isAfter(start)) && (t.isAtSameMomentAs(end) || t.isBefore(end));
+      }).toList();
+    }
+    return detectionList;
+  }
+
+  Future<void> _showDateRangeDialog() async {
+    // 中文注释：弹窗内部的本地状态（避免直接改动外部状态）
+    bool isSingle = _isSingleDayMode;
+    DateTime single = _singleDay ?? DateTime.now();
+    DateTime start = _dateRange?.start ?? DateTime.now().subtract(const Duration(days: 7));
+    DateTime end = _dateRange?.end ?? DateTime.now();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('选择日期'),
+          content: StatefulBuilder(
+            builder: (context, setStateDialog) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 中文注释：筛选模式切换（单日/范围）
+                  Row(
+                    children: [
+                      ChoiceChip(
+                        label: const Text('单日'),
+                        selected: isSingle,
+                        onSelected: (sel) => setStateDialog(() { isSingle = true; }),
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('范围'),
+                        selected: !isSingle,
+                        onSelected: (sel) => setStateDialog(() { isSingle = false; }),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (isSingle)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.calendar_today, size: 16),
+                      label: Text('日期：${DateFormat('yyyy-MM-dd').format(single)}'),
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: single,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                        );
+                        if (picked != null) {
+                          setStateDialog(() { single = picked; });
+                        }
+                      },
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.calendar_today, size: 16),
+                            label: Text('起始：${DateFormat('yyyy-MM-dd').format(start)}'),
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: start,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null) {
+                                setStateDialog(() {
+                                  start = picked;
+                                  if (end.isBefore(start)) { end = start; }
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.calendar_today, size: 16),
+                            label: Text('结束：${DateFormat('yyyy-MM-dd').format(end)}'),
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: end,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null) {
+                                setStateDialog(() {
+                                  end = picked;
+                                  if (end.isBefore(start)) { final tmp = start; start = end; end = tmp; }
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _singleDay = null;
+                  _dateRange = null;
+                });
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('清除'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  if (isSingle) {
+                    _isSingleDayMode = true;
+                    _singleDay = single;
+                    _dateRange = null;
+                  } else {
+                    _isSingleDayMode = false;
+                    _dateRange = DateTimeRange(start: start, end: end);
+                    _singleDay = null;
+                  }
+                });
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _fetchIssuesByImage(String imageId) async {
@@ -274,42 +438,112 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
       child: Column(
         children: [
           // 顶部同步按钮（混合本地/网络同步，离线展示本地缓存）
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: ElevatedButton.icon(
-                onPressed: () => _fetchDetectionList(forceNetwork: true),
-                icon: Icon(Icons.sync),
-                label: Text('同步'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-              ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _showDateRangeDialog,
+                      icon: Icon(Icons.date_range),
+                      label: Text('筛选日期'),
+                    ),
+                    SizedBox(width: 8),
+                    if (_isSingleDayMode && _singleDay != null)
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              DateFormat('yyyy-MM-dd').format(_singleDay!),
+                              style: TextStyle(color: Colors.grey[800], fontSize: 12),
+                            ),
+                            SizedBox(width: 6),
+                            InkWell(
+                              onTap: () => setState(() { _singleDay = null; }),
+                              child: Icon(Icons.close, size: 16, color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (_dateRange != null)
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              '${DateFormat('yyyy-MM-dd').format(_dateRange!.start)} ~ ${DateFormat('yyyy-MM-dd').format(_dateRange!.end)}',
+                              style: TextStyle(color: Colors.grey[800], fontSize: 12),
+                            ),
+                            SizedBox(width: 6),
+                            InkWell(
+                              onTap: () => setState(() => _dateRange = null),
+                              child: Icon(Icons.close, size: 16, color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _fetchDetectionList(forceNetwork: true),
+                  icon: Icon(Icons.sync),
+                  label: Text('同步'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+                ),
+              ],
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              itemCount: detectionList.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[300]),
-              itemBuilder: (context, index) {
-                final item = detectionList[index];
-                final count = (item.metadata?['objectCount'] as int?) ?? item.issues.length;
-                return ListTile(
-                  contentPadding: EdgeInsets.all(12),
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: SizedBox(
-                      width: 80,
-                      height: 60,
-                      child: _buildImageOrPlaceholder(item.imagePath),
+            child: Builder(
+              builder: (context) {
+                // 中文注释：根据当前筛选模式获取展示列表，若为空则显示“暂无数据”
+                final displayed = _getDisplayedList();
+                if (displayed.isEmpty) {
+                  return Center(
+                    child: Text(
+                      '暂无数据',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey[600]),
                     ),
-                  ),
-                  title: Text(item.id, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('对象数：$count · 模型：${item.detectionType ?? ''}'),
-                  onTap: () {
-                    setState(() {
-                      currentResult = item;
-                      imageIssues = item.issues;
-                    });
+                  );
+                }
+                return ListView.separated(
+                  itemCount: displayed.length,
+                  separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[300]),
+                  itemBuilder: (context, index) {
+                    final item = displayed[index];
+                    final count = (item.metadata?['objectCount'] as int?) ?? item.issues.length;
+                    return ListTile(
+                      contentPadding: EdgeInsets.all(12),
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: SizedBox(
+                          width: 80,
+                          height: 60,
+                          child: _buildImageOrPlaceholder(item.imagePath),
+                        ),
+                      ),
+                      title: Text(item.id, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text('对象数：$count · 模型：${item.detectionType ?? ''}'),
+                      onTap: () {
+                        setState(() {
+                          currentResult = item;
+                          imageIssues = item.issues;
+                        });
+                      },
+                    );
                   },
                 );
               },
