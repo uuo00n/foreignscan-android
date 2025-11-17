@@ -141,23 +141,44 @@ class RecordsSection extends StatelessWidget {
                     style: TextStyle(color: Colors.grey[600], fontSize: 12),
                   ),
                   SizedBox(height: 4),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green[100],
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      record.status,
-                      style: TextStyle(color: Colors.green[700], fontSize: 12),
-                    ),
-                  ),
+                  _buildStatusChip(record.status),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  // 中文注释：统一状态标签映射与颜色（首页与详情页保持一致）
+  Widget _buildStatusChip(String rawStatus) {
+    final String label;
+    Color bg;
+    Color fg;
+    switch (rawStatus) {
+      case '存在缺陷':
+      case '异常':
+        label = '已检测·异常';
+        bg = Colors.red[100]!;
+        fg = Colors.red[700]!;
+        break;
+      case '已检测':
+      case '合格':
+        label = '已检测·合格';
+        bg = Colors.green[100]!;
+        fg = Colors.green[700]!;
+        break;
+      default:
+        label = '未检测';
+        bg = Colors.grey[200]!;
+        fg = Colors.grey[700]!;
+        break;
+    }
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
+      child: Text(label, style: TextStyle(color: fg, fontSize: 12)),
     );
   }
 

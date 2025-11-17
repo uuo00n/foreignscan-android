@@ -189,30 +189,32 @@ class RecordDetailPage extends ConsumerWidget {
 
   /// 状态标签：根据不同状态展示不同颜色
   Widget _buildStatus(String status) {
+    String label = status;
     Color bg;
     Color fg;
     switch (status) {
-      case '已检测':
-        bg = Colors.blue[100]!;
-        fg = Colors.blue[700]!;
-        break;
       case '存在缺陷':
+      case '异常':
+        label = '已检测·异常';
         bg = Colors.red[100]!;
         fg = Colors.red[700]!;
         break;
-      default:
+      case '已检测':
+      case '合格':
+        label = '已检测·合格';
         bg = Colors.green[100]!;
         fg = Colors.green[700]!;
         break;
+      default:
+        label = '未检测';
+        bg = Colors.grey[200]!;
+        fg = Colors.grey[700]!;
+        break;
     }
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(status, style: TextStyle(color: fg, fontSize: 13)),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      child: Text(label, style: TextStyle(color: fg, fontSize: 13)),
     );
   }
 
