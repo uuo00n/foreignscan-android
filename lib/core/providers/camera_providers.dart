@@ -39,12 +39,21 @@ final selectedCameraProvider = StateProvider<int>((ref) => 0);
 class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController?>> {
   final Ref _ref;
   CameraController? _currentController;
+  bool _isInitializing = false;
+  DateTime? _lastInitAt;
 
   CameraControllerNotifier(this._ref) : super(const AsyncValue.loading()) {
     _initializeCamera();
   }
 
   Future<void> _initializeCamera() async {
+    if (_isInitializing) return;
+    final now = DateTime.now();
+    if (_lastInitAt != null && now.difference(_lastInitAt!).inMilliseconds < 1200) {
+      return;
+    }
+    _isInitializing = true;
+    _lastInitAt = now;
     const int maxRetries = 3;
     int retryCount = 0;
     
@@ -116,6 +125,7 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
             }
             state = AsyncValue.data(_currentController);
             _ref.read(loggerProvider).i('相机初始化成功: ${camera.name}');
+            _isInitializing = false;
             return; // 成功初始化，退出循环
           }
         } catch (e, stackTrace) {
@@ -123,6 +133,7 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
             // 最后一次尝试失败，设置错误状态
             state = AsyncValue.error(e, stackTrace);
             _ref.read(loggerProvider).e('相机初始化失败，已达到最大重试次数', error: e);
+            _isInitializing = false;
             return;
           }
           
@@ -133,6 +144,7 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
       state = AsyncValue.error(e, stackTrace);
       _ref.read(loggerProvider).e('相机初始化失败', error: e, stackTrace: stackTrace);
     }
+    _isInitializing = false;
   }
 
   Future<void> switchCamera(int cameraIndex) async {

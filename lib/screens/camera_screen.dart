@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camera/camera.dart';
@@ -15,6 +16,18 @@ class CameraScreen extends ConsumerStatefulWidget {
 class _CameraScreenState extends ConsumerState<CameraScreen> {
   // 添加闪光灯状态
   FlashMode _flashMode = FlashMode.off;
+  Offset? _focusIndicatorOffset;
+  bool _focusLocked = false;
+  bool _zoomInitialized = false;
+  double _minZoom = 1.0;
+  double _maxZoom = 1.0;
+  double _currentZoom = 1.0;
+  double _startZoomOnScale = 1.0;
+  bool _showZoomSlider = true;
+  Timer? _zoomApplyDebounce;
+  Timer? _zoomApplyTicker;
+  bool _isDraggingSlider = false;
+  double _lastAppliedZoom = 1.0;
   
   @override
   void initState() {
@@ -56,7 +69,26 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   @override
   void dispose() {
     ref.read(cameraControllerProvider.notifier).disposeCamera();
+    _zoomApplyDebounce?.cancel();
+    _zoomApplyTicker?.cancel();
     super.dispose();
+  }
+
+  void _startZoomTicker(CameraController controller) {
+    _zoomApplyTicker?.cancel();
+    _zoomApplyTicker = Timer.periodic(const Duration(milliseconds: 80), (_) async {
+      final z = _currentZoom.clamp(_minZoom, _maxZoom);
+      if ((z - _lastAppliedZoom).abs() < 0.01) return;
+      _lastAppliedZoom = z;
+      try {
+        await controller.setZoomLevel(z);
+      } catch (_) {}
+    });
+  }
+
+  void _stopZoomTicker() {
+    _zoomApplyTicker?.cancel();
+    _zoomApplyTicker = null;
   }
 
   Future<void> _takePicture() async {
@@ -217,6 +249,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
             );
           }
 
+          if (!_zoomInitialized) {
+            () async {
+              try {
+                final min = await controller.getMinZoomLevel();
+                final max = await controller.getMaxZoomLevel();
+                setState(() {
+                  _minZoom = min;
+                  _maxZoom = max;
+                  _currentZoom = _minZoom;
+                  _zoomInitialized = true;
+                });
+                await controller.setZoomLevel(_currentZoom);
+              } catch (_) {}
+            }();
+          }
+
           return Stack(
             children: [
               Positioned.fill(
@@ -227,20 +275,177 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                       controller,
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          return GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTapDown: (details) async {
-                              final offset = Offset(
-                                details.localPosition.dx / constraints.maxWidth,
-                                details.localPosition.dy / constraints.maxHeight,
-                              );
-                              try {
-                                await controller.setFocusPoint(offset);
-                              } catch (_) {}
-                              try {
-                                await controller.setExposurePoint(offset);
-                              } catch (_) {}
-                            },
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTapDown: (details) async {
+                                  final offset = Offset(
+                                    details.localPosition.dx / constraints.maxWidth,
+                                    details.localPosition.dy / constraints.maxHeight,
+                                  );
+                                  try {
+                                    await controller.setFocusPoint(offset);
+                                  } catch (_) {}
+                                  try {
+                                    await controller.setExposurePoint(offset);
+                                  } catch (_) {}
+                                  setState(() {
+                                    _focusIndicatorOffset = details.localPosition;
+                                    _focusLocked = false;
+                                  });
+                                },
+                                onLongPressStart: (details) async {
+                                  final localPos = details.localPosition;
+                                  final offset = Offset(
+                                    localPos.dx / constraints.maxWidth,
+                                    localPos.dy / constraints.maxHeight,
+                                  );
+                                  try {
+                                    await controller.setFocusPoint(offset);
+                                  } catch (_) {}
+                                  try {
+                                    await controller.setExposurePoint(offset);
+                                  } catch (_) {}
+                                  try {
+                                    await controller.setFocusMode(FocusMode.locked);
+                                  } catch (_) {}
+                                  try {
+                                    await controller.setExposureMode(ExposureMode.locked);
+                                  } catch (_) {}
+                                  setState(() {
+                                    _focusIndicatorOffset = localPos;
+                                    _focusLocked = true;
+                                  });
+                                },
+                                onScaleStart: (details) {
+                                  _startZoomOnScale = _currentZoom;
+                                  setState(() {
+                                    _showZoomSlider = true;
+                                  });
+                                  _startZoomTicker(controller);
+                                },
+                                onScaleUpdate: (details) async {
+                                  final target = (_startZoomOnScale * details.scale)
+                                      .clamp(_minZoom, _maxZoom);
+                                  final z = target.toDouble();
+                                  if ((z - _currentZoom).abs() > 0.001) {
+                                    setState(() {
+                                      _currentZoom = z;
+                                    });
+                                  }
+                                  if (!_showZoomSlider) {
+                                    setState(() {
+                                      _showZoomSlider = true;
+                                    });
+                                  }
+                                },
+                                onScaleEnd: (_) async {
+                                  _stopZoomTicker();
+                                  try {
+                                    final finalZoom = _currentZoom.clamp(_minZoom, _maxZoom);
+                                    setState(() {
+                                      _currentZoom = finalZoom;
+                                    });
+                                    await controller.setZoomLevel(finalZoom);
+                                  } catch (_) {}
+                                },
+                              ),
+                              Positioned(
+                                  left: 12,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: SafeArea(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black54,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            '${_currentZoom.toStringAsFixed(1)}x',
+                                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Container(
+                                          width: 56,
+                                          height: 280,
+                                          decoration: BoxDecoration(
+                                            color: Colors.black45,
+                                            borderRadius: BorderRadius.circular(24),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: RotatedBox(
+                                            quarterTurns: 3,
+                                            child: SliderTheme(
+                                              data: SliderTheme.of(context).copyWith(
+                                                trackHeight: 6,
+                                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                                              ),
+                                              child: Slider(
+                                                min: _minZoom,
+                                                max: _maxZoom,
+                                                value: _currentZoom.clamp(_minZoom, _maxZoom),
+                                                onChangeStart: (_) {
+                                                  _isDraggingSlider = true;
+                                                  _startZoomTicker(controller);
+                                                },
+                                                onChanged: (v) {
+                                                  setState(() {
+                                                    _currentZoom = v;
+                                                    _showZoomSlider = true;
+                                                  });
+                                                },
+                                                onChangeEnd: (v) async {
+                                                  _isDraggingSlider = false;
+                                                  _zoomApplyDebounce?.cancel();
+                                                  _stopZoomTicker();
+                                                  try {
+                                                    await controller.setZoomLevel(v);
+                                                  } catch (_) {}
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              if (_focusIndicatorOffset != null)
+                                Positioned(
+                                  left: _focusIndicatorOffset!.dx - 20,
+                                  top: _focusIndicatorOffset!.dy - 20,
+                                  child: TweenAnimationBuilder<double>(
+                                    tween: Tween(begin: 1.2, end: 1.0),
+                                    duration: const Duration(milliseconds: 250),
+                                    builder: (context, scale, child) {
+                                      return AnimatedOpacity(
+                                        opacity: 0.9,
+                                        duration: const Duration(milliseconds: 300),
+                                        child: Transform.scale(
+                                          scale: scale,
+                                          child: Container(
+                                            width: 44,
+                                            height: 44,
+                                            decoration: BoxDecoration(
+                                              border: Border.all(
+                                                color: _focusLocked ? Colors.green : Colors.white,
+                                                width: 2,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                            ],
                           );
                         },
                       ),
