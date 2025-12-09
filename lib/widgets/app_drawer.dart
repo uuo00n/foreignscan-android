@@ -445,24 +445,26 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       final prefs = await ref.read(sharedPreferencesProvider.future);
       final savedIp = prefs.getString('server_ip');
       final savedPort = prefs.getInt('server_port');
-      if (savedIp != null && savedIp.isNotEmpty) {
+      if (savedIp != null && savedIp.isNotEmpty && savedPort != null) {
         _ipController.text = savedIp;
-      } else {
-        _ipController.text = '172.20.10.3';
-      }
-      _portController.text = (savedPort ?? 3000).toString();
+        _portController.text = savedPort.toString();
 
-      // 中文注释：初始化 WiFi 服务与 Dio 的地址，使应用各处统一使用保存的服务器设置
-      final ip = _ipController.text.trim();
-      final port = int.tryParse(_portController.text.trim()) ?? 3000;
-      final wifiService = ref.read(wifiServiceProvider);
-      wifiService.setServerAddress(ip, port);
-      final dio = ref.read(dioProvider);
-      dio.options.baseUrl = 'http://$ip:$port/api';
+        // 中文注释：仅当存在已保存的服务器配置时，初始化 WiFi 服务与 Dio 地址
+        final ip = _ipController.text.trim();
+        final port = int.tryParse(_portController.text.trim()) ?? 3000;
+        final wifiService = ref.read(wifiServiceProvider);
+        wifiService.setServerAddress(ip, port);
+        final dio = ref.read(dioProvider);
+        dio.options.baseUrl = 'http://$ip:$port/api';
+      } else {
+        // 中文注释：无已保存配置时，不使用默认地址，留空等待用户手动配置
+        _ipController.text = '';
+        _portController.text = '';
+      }
     } catch (_) {
-      // 读取失败则使用默认
-      _ipController.text = '172.20.10.3';
-      _portController.text = '3000';
+      // 中文注释：读取失败时同样不填充默认地址，避免误用
+      _ipController.text = '';
+      _portController.text = '';
     }
   }
 }

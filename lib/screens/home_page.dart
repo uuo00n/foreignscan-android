@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/providers/home_providers.dart';
+import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
 import 'package:foreignscan/core/widgets/loading_widget.dart';
 import 'package:foreignscan/core/widgets/error_widget.dart';
@@ -13,11 +14,39 @@ import 'package:foreignscan/screens/camera_screen.dart';
 import 'package:foreignscan/core/widgets/app_bar_actions.dart';
 import 'package:foreignscan/widgets/app_drawer.dart';
 
-class HomePage extends ConsumerWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage> {
+  // 中文注释：首次安装时提示配置服务器的输入框与状态
+  final TextEditingController _serverIpController = TextEditingController();
+  final TextEditingController _serverPortController = TextEditingController();
+  bool _hasPromptedSetup = false; // 防止重复弹窗
+  bool _isTestingServer = false; // 测试连接中的状态
+  String? _testMsg; // 测试结果提示文案
+
+  @override
+  void initState() {
+    super.initState();
+    // 中文注释：首帧后检查是否已配置服务器，未配置则弹出设置对话框
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _promptServerSetupIfNeeded();
+    });
+  }
+
+  @override
+  void dispose() {
+    _serverIpController.dispose();
+    _serverPortController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final homeState = ref.watch(homeViewModelProvider);
     final homeViewModel = ref.read(homeViewModelProvider.notifier);
 
@@ -94,6 +123,274 @@ class HomePage extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+
+  // 中文注释：检查是否已配置服务器；若未配置，则弹出引导对话框
+  Future<void> _promptServerSetupIfNeeded() async {
+    if (_hasPromptedSetup) return; // 防止重复执行
+    try {
+      final prefs = await ref.read(sharedPreferencesProvider.future);
+      final savedIp = prefs.getString('server_ip');
+      final savedPort = prefs.getInt('server_port');
+      if (savedIp == null || savedIp.isEmpty || savedPort == null) {
+        _hasPromptedSetup = true;
+        _serverIpController.text = savedIp ?? '';
+        _serverPortController.text = savedPort?.toString() ?? '';
+        _showServerSetupDialog();
+      } else {
+        // 配置已存在，应用配置并初始化数据
+        final dio = ref.read(dioProvider);
+        dio.options.baseUrl = 'http://$savedIp:$savedPort/api';
+        
+        final wifiService = ref.read(wifiServiceProvider);
+        wifiService.setServerAddress(savedIp, savedPort);
+        
+        // 延迟初始化数据，避免在build过程中触发状态更新
+        Future.microtask(() {
+          ref.read(homeViewModelProvider.notifier).initializeData();
+        });
+      }
+    } catch (_) {
+      // 忽略异常，避免影响正常启动
+    }
+  }
+
+  // 中文注释：首次安装的服务器设置弹窗
+  Future<void> _showServerSetupDialog() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // 首次安装强制配置，禁止点击遮罩关闭
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dCtx, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColor.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.settings_ethernet_rounded,
+                      size: 48,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '配置服务器',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '首次使用需连接服务器以同步数据',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _serverIpController,
+                      decoration: InputDecoration(
+                        labelText: '服务器IP',
+                        hintText: '例如: 192.168.1.100',
+                        prefixIcon: const Icon(Icons.computer_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                      ),
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _serverPortController,
+                      decoration: InputDecoration(
+                        labelText: '端口',
+                        hintText: '例如: 3000',
+                        prefixIcon: const Icon(Icons.numbers_rounded),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 16),
+                    // 状态反馈区域
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _testMsg == null
+                            ? Colors.transparent
+                            : (_isTestingServer
+                                ? Colors.blue[50]
+                                : (_testMsg == '连接成功' ? Colors.green[50] : Colors.red[50])),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _testMsg == null
+                              ? Colors.transparent
+                              : (_isTestingServer
+                                  ? Colors.blue[200]!
+                                  : (_testMsg == '连接成功' ? Colors.green[200]! : Colors.red[200]!)),
+                        ),
+                      ),
+                      child: _testMsg == null
+                          ? const SizedBox.shrink()
+                          : Row(
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: _isTestingServer
+                                      ? const CircularProgressIndicator(strokeWidth: 2)
+                                      : Icon(
+                                          _testMsg == '连接成功'
+                                              ? Icons.check_circle_rounded
+                                              : Icons.error_rounded,
+                                          size: 20,
+                                          color: _testMsg == '连接成功'
+                                              ? Colors.green[700]
+                                              : Colors.red[700],
+                                        ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _isTestingServer ? '正在测试连接...' : _testMsg!,
+                                    style: TextStyle(
+                                      color: _isTestingServer
+                                          ? Colors.blue[800]
+                                          : (_testMsg == '连接成功'
+                                              ? Colors.green[800]
+                                              : Colors.red[800]),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              actions: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          foregroundColor: Colors.grey[600],
+                        ),
+                        child: const Text('稍后再说'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2, // 让确认按钮占据更多空间
+                      child: ElevatedButton(
+                        onPressed: _isTestingServer
+                            ? null
+                            : () async {
+                                setState(() {
+                                  _isTestingServer = true;
+                                  _testMsg = null;
+                                });
+                                final ip = _serverIpController.text.trim();
+                                final port = int.tryParse(_serverPortController.text.trim());
+                                if (ip.isEmpty || port == null || port <= 0) {
+                                  setState(() {
+                                    _isTestingServer = false;
+                                    _testMsg = '请输入有效的IP和端口';
+                                  });
+                                  return;
+                                }
+                                // 更新WiFi服务地址并测试连接
+                                final wifiService = ref.read(wifiServiceProvider);
+                                wifiService.setServerAddress(ip, port);
+                                bool ok = false;
+                                try {
+                                  ok = await wifiService.testConnection();
+                                } catch (_) {
+                                  ok = false;
+                                }
+                                if (!mounted) return;
+                                if (ok) {
+                                  // 成功：更新 Dio baseUrl、持久化、刷新相关Provider
+                                  final dio = ref.read(dioProvider);
+                                  dio.options.baseUrl = 'http://$ip:$port/api';
+                                  try {
+                                    final prefs = await ref.read(sharedPreferencesProvider.future);
+                                    await prefs.setString('server_ip', ip);
+                                    await prefs.setInt('server_port', port);
+                                  } catch (_) {}
+                                  ref.invalidate(styleImagesForSelectedSceneProvider);
+                                  // 初始化首页数据
+                                  ref.read(homeViewModelProvider.notifier).initializeData();
+                                  setState(() {
+                                    _testMsg = '连接成功';
+                                    _isTestingServer = false;
+                                  });
+                                  
+                                  // 延迟关闭，让用户看到成功状态
+                                  await Future.delayed(const Duration(milliseconds: 500));
+                                  if (!dCtx.mounted) return;
+                                  
+                                  Navigator.of(ctx).pop();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('服务器已配置成功'),
+                                      backgroundColor: Colors.green,
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                } else {
+                                  setState(() {
+                                    _isTestingServer = false;
+                                    _testMsg = '连接失败，请检查IP与端口';
+                                  });
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          '测试连接并保存',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
   

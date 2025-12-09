@@ -163,11 +163,9 @@ class HomeViewModel extends StateNotifier<HomeState> {
   final SceneService _sceneService;
   final RecordService _recordService;
 
-  HomeViewModel(this._sceneService, this._recordService) : super(const HomeState()) {
-    _initializeData();
-  }
+  HomeViewModel(this._sceneService, this._recordService) : super(const HomeState());
 
-  Future<void> _initializeData() async {
+  Future<void> initializeData() async {
     try {
       state = state.copyWith(isLoading: true, errorMessage: null);
       
@@ -263,6 +261,6 @@ class HomeViewModel extends StateNotifier<HomeState> {
   }
 
   Future<void> refreshData() async {
-    await _initializeData();
+    await initializeData();
   }
 }
