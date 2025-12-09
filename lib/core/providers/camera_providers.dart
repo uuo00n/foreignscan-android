@@ -73,7 +73,7 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
           
           _currentController = CameraController(
             camera,
-            ResolutionPreset.high,
+            ResolutionPreset.max,
             enableAudio: false,
             imageFormatGroup: ImageFormatGroup.jpeg,
           );

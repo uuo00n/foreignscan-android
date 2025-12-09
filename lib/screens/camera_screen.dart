@@ -219,8 +219,35 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
           return Stack(
             children: [
-              // 相机预览
-              Positioned.fill(child: CameraPreview(controller)),
+              Positioned.fill(
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: controller.value.aspectRatio,
+                    child: CameraPreview(
+                      controller,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapDown: (details) async {
+                              final offset = Offset(
+                                details.localPosition.dx / constraints.maxWidth,
+                                details.localPosition.dy / constraints.maxHeight,
+                              );
+                              try {
+                                await controller.setFocusPoint(offset);
+                              } catch (_) {}
+                              try {
+                                await controller.setExposurePoint(offset);
+                              } catch (_) {}
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
               // 右侧控制面板
               Positioned(
