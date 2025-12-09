@@ -360,18 +360,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                     child: Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black54,
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            '${_currentZoom.toStringAsFixed(1)}x',
-                                            style: const TextStyle(color: Colors.white, fontSize: 12),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
+                                        // 已移除左侧倍数文本展示，改为在拍摄按钮下方统一显示
                                         Container(
                                           width: 56,
                                           height: 280,
@@ -501,10 +490,67 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                       
                       // 拍照按钮
                       FloatingActionButton(
-                        onPressed: _takePicture,
+                        onPressed: () async {
+                          await _takePicture();
+                          final c = ref.read(cameraControllerProvider).value;
+                          if (c != null) {
+                            final double logicalMax = _maxZoom < 4.0 ? _maxZoom : 4.0;
+                            double next = _currentZoom + 1.0;
+                            if (next > logicalMax - 1e-6) {
+                              next = 1.0;
+                            } else if (next > logicalMax) {
+                              next = logicalMax;
+                            }
+                            setState(() {
+                              _currentZoom = next;
+                            });
+                            try {
+                              await c.setZoomLevel(next.clamp(_minZoom, _maxZoom));
+                            } catch (_) {}
+                          }
+                        },
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
                         child: const Icon(Icons.camera, size: 32),
+                      ),
+                      const SizedBox(height: 16),
+                      // 变焦倍数展示：形状、大小、间距与拍照按钮保持一致
+                      GestureDetector(
+                        onTap: () async {
+                          final c = ref.read(cameraControllerProvider).value;
+                          if (c != null) {
+                            final double logicalMax = _maxZoom < 4.0 ? _maxZoom : 4.0;
+                            double next = _currentZoom + 1.0;
+                            if (next > logicalMax - 1e-6) {
+                              next = 1.0;
+                            } else if (next > logicalMax) {
+                              next = logicalMax;
+                            }
+                            setState(() {
+                              _currentZoom = next;
+                            });
+                            try {
+                              await c.setZoomLevel(next.clamp(_minZoom, _maxZoom));
+                            } catch (_) {}
+                          }
+                        },
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${_currentZoom.toStringAsFixed(1)}x',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
