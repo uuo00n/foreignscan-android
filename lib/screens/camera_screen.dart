@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camera/camera.dart';
 import 'package:foreignscan/core/providers/camera_providers.dart';
 import 'package:foreignscan/core/widgets/loading_widget.dart';
-import 'package:foreignscan/core/widgets/error_widget.dart';
+import '../core/widgets/error_widget.dart';
 import 'package:foreignscan/core/theme/app_theme.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {

@@ -789,7 +789,6 @@ class RecordDetailPage extends ConsumerWidget {
                     );
                   },
                   child: Container(
-                    height: 160,
                     width: double.infinity,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
@@ -804,22 +803,34 @@ class RecordDetailPage extends ConsumerWidget {
                     ),
                     clipBehavior: Clip.hardEdge,
                     child: Stack(
-                      fit: StackFit.expand,
                       children: [
                         () {
                           final path = res.imagePath;
                           if (path.isNotEmpty && (path.startsWith('http://') || path.startsWith('https://'))) {
-                            return Image.network(path, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
+                            return Image.network(path,
+                              fit: BoxFit.fitWidth,
+                              width: double.infinity,
+                              errorBuilder: (_, __, ___) => SizedBox(
+                                height: 160,
+                                child: _brokenImagePlaceholder(),
+                              ),
                             );
                           }
                           if (path.isNotEmpty) {
                             final f = File(path);
-                            return Image.file(f, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
+                            return Image.file(f,
+                              fit: BoxFit.fitWidth,
+                              width: double.infinity,
+                              errorBuilder: (_, __, ___) => SizedBox(
+                                height: 160,
+                                child: _brokenImagePlaceholder(),
+                              ),
                             );
                           }
-                          return _brokenImagePlaceholder();
+                          return SizedBox(
+                            height: 160,
+                            child: _brokenImagePlaceholder(),
+                          );
                         }(),
                         Positioned(
                           bottom: 8,
