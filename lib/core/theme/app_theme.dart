@@ -2,48 +2,71 @@ import 'package:flutter/material.dart';
 import 'package:foreignscan/config/app_constants.dart';
 
 class AppTheme {
-  static const Color primaryColor = Color(0xFF2196F3);
-  static const Color secondaryColor = Color(0xFF03DAC6);
-  static const Color errorColor = Color(0xFFB00020);
-  static const Color warningColor = Color(0xFFFF9800);
-  static const Color successColor = Color(0xFF4CAF50);
-  // 中文注释：新增两种与主色蓝色（primaryColor）更为协调的点缀色
-  // 1) 浅蓝（Blue 300）：用于“新建检测”按钮，强调但不抢主色
-  static const Color accentBlueLight = Color.fromARGB(255, 75, 129, 173);
-  // 2) 靛蓝（Indigo 400）：用于“检测结果”按钮，层级更稳重
-  static const Color accentIndigo = Color(0xFF5C6BC0);
+  static const Color primaryColor = Color(0xFF0D47A1); // Deep Blue
+  static const Color secondaryColor = Color(0xFF00ACC1); // Cyan
+  static const Color errorColor = Color(0xFFD32F2F); // Red
+  static const Color warningColor = Color(0xFFFFA000); // Amber
+  static const Color successColor = Color(0xFF388E3C); // Green
   
-  static const Color backgroundLight = Color(0xFFF5F5F5);
-  static const Color backgroundDark = Color(0xFF121212);
+  static const Color accentBlueLight = Color(0xFF42A5F5); // Blue 400
+  static const Color accentIndigo = Color(0xFF3949AB); // Indigo 600
+  
+  static const Color backgroundLight = Color(0xFFF8F9FA); // Very Light Grey
+  static const Color backgroundDark = Color(0xFF121212); // Almost Black
   static const Color surfaceLight = Color(0xFFFFFFFF);
   static const Color surfaceDark = Color(0xFF1E1E1E);
-  
+
+  static const Color textPrimary = Color(0xFF212121);
+  static const Color textSecondary = Color(0xFF757575);
+  static const Color textInverse = Colors.white;
+  static const Color dividerColor = Color(0xFFEEEEEE);
+  static final Color shadowColor = Colors.black.withValues(alpha: 0.05);
+
+  // Gradient Colors
+  static const LinearGradient primaryGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF1565C0), Color(0xFF0D47A1)],
+  );
+
   static final ThemeData lightTheme = ThemeData(
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(
       seedColor: primaryColor,
+      secondary: secondaryColor,
+      error: errorColor,
+      surface: surfaceLight,
       brightness: Brightness.light,
     ),
+    scaffoldBackgroundColor: backgroundLight,
     appBarTheme: const AppBarTheme(
-      elevation: AppConstants.elevation,
+      elevation: 0,
       centerTitle: true,
-      backgroundColor: primaryColor,
+      backgroundColor: Colors.transparent, // For gradient background
       foregroundColor: Colors.white,
       titleTextStyle: TextStyle(
         fontSize: 20,
         fontWeight: FontWeight.bold,
         color: Colors.white,
+        letterSpacing: 0.5,
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        elevation: AppConstants.elevation,
+        elevation: 2,
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(
           horizontal: AppConstants.paddingLarge,
-          vertical: AppConstants.paddingMedium,
+          vertical: 12,
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        textStyle: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
         ),
       ),
     ),
@@ -51,19 +74,30 @@ class AppTheme {
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(
           horizontal: AppConstants.paddingLarge,
-          vertical: AppConstants.paddingMedium,
+          vertical: 12,
         ),
+        side: const BorderSide(color: primaryColor, width: 1.5),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        textStyle: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
         ),
       ),
     ),
     cardTheme: CardThemeData(
-      elevation: AppConstants.elevation,
+      elevation: 4,
+      shadowColor: Colors.black.withValues(alpha: 0.1),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+        borderRadius: BorderRadius.circular(16),
       ),
-      margin: const EdgeInsets.all(AppConstants.paddingMedium),
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppConstants.paddingMedium,
+        vertical: AppConstants.paddingSmall,
+      ),
+      color: surfaceLight,
     ),
     inputDecorationTheme: InputDecorationTheme(
       border: OutlineInputBorder(

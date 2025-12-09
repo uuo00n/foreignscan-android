@@ -12,6 +12,8 @@ import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/services/detection_service.dart';
 import 'package:foreignscan/models/detection_result.dart';
 
+import 'package:foreignscan/core/theme/app_theme.dart';
+
 /// 拍摄记录详情页（对比图展示）
 /// 中文说明：
 /// - 左侧展示“场景样式图”（参考图，来自后端样式图接口）；
@@ -29,7 +31,12 @@ class RecordDetailPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('拍摄记录详情（对比图）'),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: AppTheme.primaryGradient,
+          ),
+        ),
+        title: const Text('拍摄记录详情'),
         actions: [
           // 右上角全屏查看按钮
           IconButton(
@@ -45,7 +52,7 @@ class RecordDetailPage extends ConsumerWidget {
                 ),
               );
             },
-            icon: const Icon(Icons.fullscreen),
+            icon: const Icon(Icons.fullscreen_rounded),
             tooltip: '全屏查看',
           ),
         ],
@@ -57,47 +64,95 @@ class RecordDetailPage extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            // 顶部标题与说明
-            Row(
-              children: [
-                Text(
-                  '场景：${record.sceneName}',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              // 顶部标题与说明
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  dateFormat.format(record.timestamp),
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.place_rounded,
+                            color: AppTheme.primaryColor,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                record.sceneName,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    dateFormat.format(record.timestamp),
+                                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        _buildStatus(record.status),
+                      ],
+                    ),
+                  ],
                 ),
-                const Spacer(),
-                _buildStatus(record.status),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // 对比图区域：左侧样式图（参考图） + 右侧用户图片（限定高度，整体页面可上下滚动）
-            SizedBox(
-              height: 360,
-              child: Row(
-                children: [
-                  // 左侧：样式图
-                  Expanded(
-                    child: _buildStyleImagePanel(context, ref, record.sceneName),
-                  ),
-                  const SizedBox(width: 16),
-                  // 右侧：用户拍摄图片
-                  Expanded(
-                    child: _buildUserImagePanel(context, record.imagePath, heroTagUser),
-                  ),
-                ],
               ),
-            ),
-          const SizedBox(height: 16),
-            // 中文注释：核查记录信息（从检测结果获取摘要）
-            _buildVerificationInfoPanel(context, ref, record.id),
-            const SizedBox(height: 16),
-            // 检测详情面板（来自 /api/images/{imageId}/detections）
-            _buildDetectionDetailPanel(context, ref, record.id),
-          ],
+              const SizedBox(height: 20),
+              
+              // 对比图区域：左侧样式图（参考图） + 右侧用户图片（限定高度，整体页面可上下滚动）
+              SizedBox(
+                height: 360,
+                child: Row(
+                  children: [
+                    // 左侧：样式图
+                    Expanded(
+                      child: _buildStyleImagePanel(context, ref, record.sceneName),
+                    ),
+                    const SizedBox(width: 16),
+                    // 右侧：用户拍摄图片
+                    Expanded(
+                      child: _buildUserImagePanel(context, record.imagePath, heroTagUser),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              // 中文注释：核查记录信息（从检测结果获取摘要）
+              _buildVerificationInfoPanel(context, ref, record.id),
+              const SizedBox(height: 20),
+              // 检测详情面板（来自 /api/images/{imageId}/detections）
+              _buildDetectionDetailPanel(context, ref, record.id),
+              const SizedBox(height: 40), // Bottom padding
+            ],
           ),
         ),
       ),
@@ -159,11 +214,11 @@ class RecordDetailPage extends ConsumerWidget {
     return Container(
       height: 240,
       decoration: BoxDecoration(
-        color: Colors.grey[800],
+        color: AppTheme.backgroundLight,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Center(
-        child: Icon(Icons.image, size: 48, color: Colors.orange),
+      child: Center(
+        child: Icon(Icons.image, size: 48, color: AppTheme.textSecondary),
       ),
     );
   }
@@ -172,9 +227,9 @@ class RecordDetailPage extends ConsumerWidget {
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: Colors.grey[700]),
+        Icon(icon, size: 20, color: AppTheme.textSecondary),
         const SizedBox(width: 8),
-        Text(label, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+        Text(label, style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary)),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -192,29 +247,45 @@ class RecordDetailPage extends ConsumerWidget {
     String label = status;
     Color bg;
     Color fg;
+    IconData icon;
+
     switch (status) {
       case '存在缺陷':
       case '异常':
-        label = '已检测·异常';
-        bg = Colors.red[100]!;
-        fg = Colors.red[700]!;
+        label = '异常';
+        bg = AppTheme.errorColor.withValues(alpha: 0.1);
+        fg = AppTheme.errorColor;
+        icon = Icons.warning_amber_rounded;
         break;
       case '已检测':
       case '合格':
-        label = '已检测·合格';
-        bg = Colors.green[100]!;
-        fg = Colors.green[700]!;
+        label = '合格';
+        bg = AppTheme.successColor.withValues(alpha: 0.1);
+        fg = AppTheme.successColor;
+        icon = Icons.check_circle_outline;
         break;
       default:
         label = '未检测';
-        bg = Colors.grey[200]!;
-        fg = Colors.grey[700]!;
+        bg = AppTheme.surfaceLight;
+        fg = AppTheme.textSecondary;
+        icon = Icons.help_outline;
         break;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-      child: Text(label, style: TextStyle(color: fg, fontSize: 13)),
+      decoration: BoxDecoration(
+        color: bg, 
+        borderRadius: BorderRadius.circular(6),
+        border: status == '未检测' ? Border.all(color: AppTheme.dividerColor) : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(color: fg, fontSize: 13, fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 
@@ -230,10 +301,17 @@ class RecordDetailPage extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.grey[600],
+            color: AppTheme.secondaryColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(4),
           ),
-          child: const Text('样式参考图', style: TextStyle(color: Colors.white, fontSize: 12)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.image_outlined, size: 14, color: AppTheme.secondaryColor),
+              const SizedBox(width: 4),
+              const Text('样式参考图', style: TextStyle(color: AppTheme.secondaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         Expanded(
@@ -372,10 +450,17 @@ class RecordDetailPage extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.blue[600],
+            color: AppTheme.primaryColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(4),
           ),
-          child: const Text('用户拍摄图', style: TextStyle(color: Colors.white, fontSize: 12)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.camera_alt_outlined, size: 14, color: AppTheme.primaryColor),
+              const SizedBox(width: 4),
+              Text('用户拍摄图', style: TextStyle(color: AppTheme.primaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         Expanded(
@@ -408,19 +493,18 @@ class RecordDetailPage extends ConsumerWidget {
   Widget _imagePanel({required BuildContext context, required Widget imageWidget}) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey[200],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
+        color: AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: AppTheme.shadowColor,
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: imageWidget,
       ),
     );
@@ -434,7 +518,7 @@ class RecordDetailPage extends ConsumerWidget {
         children: const [
           SizedBox(width: 32, height: 32, child: CircularProgressIndicator()),
           SizedBox(height: 8),
-          Text('样式图加载中...', style: TextStyle(color: Colors.black54, fontSize: 12)),
+          Text('样式图加载中...', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         ],
       ),
     );
@@ -446,9 +530,9 @@ class RecordDetailPage extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.image_not_supported, size: 48, color: Colors.grey[400]),
+          Icon(Icons.image_not_supported, size: 48, color: AppTheme.textSecondary.withValues(alpha: 0.5)),
           const SizedBox(height: 8),
-          Text(text, style: const TextStyle(color: Colors.black45, fontSize: 12)),
+          Text(text, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         ],
       ),
     );
@@ -460,9 +544,9 @@ class RecordDetailPage extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: const [
-          Icon(Icons.broken_image, size: 48, color: Colors.orange),
+          Icon(Icons.broken_image, size: 48, color: AppTheme.warningColor),
           SizedBox(height: 8),
-          Text('图片加载失败', style: TextStyle(color: Colors.black45, fontSize: 12)),
+          Text('图片加载失败', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         ],
       ),
     );
@@ -475,30 +559,50 @@ class RecordDetailPage extends ConsumerWidget {
   /// - 列表展示每条问题的类型、严重程度与描述。
   Widget _buildDetectionDetailPanel(BuildContext context, WidgetRef ref, String imageId) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.rule_folder, size: 18, color: Colors.blue),
-              const SizedBox(width: 6),
-              const Text('检测详情', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.errorColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.rule_folder_outlined, size: 20, color: AppTheme.errorColor),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                '检测详情',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           FutureBuilder<DetectionResult?>(
             future: ref.read(detectionServiceProvider).getLatestDetectionByImage(imageId),
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
-                  child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator()),
+                  child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator())),
                 );
               }
               if (snap.hasError) {
@@ -507,26 +611,64 @@ class RecordDetailPage extends ConsumerWidget {
               final res = snap.data;
               final issues = res?.issues ?? const <DetectionIssue>[];
               if (issues.isEmpty) {
-                return Text('暂无数据', style: TextStyle(color: Colors.grey[600]));
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Text(
+                      '暂无检测异常',
+                      style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                    ),
+                  ),
+                );
               }
               return Column(
                 children: issues.map((issue) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: issue.severity.color.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: issue.severity.color.withValues(alpha: 0.2)),
+                    ),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.error_outline, color: issue.severity.color, size: 18),
-                        const SizedBox(width: 8),
+                        Icon(Icons.error_outline, color: issue.severity.color, size: 20),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Text('[${issue.type.displayName} · ${issue.severity.displayName}] ${issue.description}',
-                            style: const TextStyle(fontSize: 14)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${issue.type.displayName} · ${issue.severity.displayName}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: issue.severity.color,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                issue.description,
+                                style: const TextStyle(fontSize: 13, height: 1.4),
+                              ),
+                            ],
+                          ),
                         ),
-                        () {
-                          final conf = issue.confidence;
-                          if (conf == null) return const SizedBox.shrink();
-                          return Text('${(conf * 100).toStringAsFixed(0)}%',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 12));
-                        }(),
+                        if (issue.confidence != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.grey[200]!),
+                            ),
+                            child: Text(
+                              '${(issue.confidence! * 100).toStringAsFixed(0)}%',
+                              style: TextStyle(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
                       ],
                     ),
                   );
@@ -542,21 +684,29 @@ class RecordDetailPage extends ConsumerWidget {
   /// 核查记录信息面板：展示模型、对象数、置信度、核查结果与缩略图
   Widget _buildVerificationInfoPanel(BuildContext context, WidgetRef ref, String imageId) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: FutureBuilder<DetectionResult?>(
         future: ref.read(detectionServiceProvider).getLatestDetectionByImage(imageId),
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
-            return const SizedBox(height: 40, child: Center(child: CircularProgressIndicator()));
+            return const SizedBox(height: 60, child: Center(child: CircularProgressIndicator()));
           }
           final res = snap.data;
           if (res == null) {
-            return Text('暂无数据', style: TextStyle(color: Colors.grey[600]));
+            return Center(
+              child: Text('暂无核查数据', style: TextStyle(color: Colors.grey[400])),
+            );
           }
           final count = (res.metadata?['objectCount'] as int?) ?? res.issues.length;
           final verification = count > 0 ? '异常' : '已确认';
@@ -569,64 +719,129 @@ class RecordDetailPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                children: const [
-                  Icon(Icons.fact_check, size: 18, color: Colors.teal),
-                  SizedBox(width: 6),
-                  Text('核查记录', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.secondaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.fact_check_outlined, size: 20, color: AppTheme.secondaryColor),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    '核查记录',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
-              _buildInfoRow(Icons.confirmation_number, '编号', res.id),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.model_training, '模型', res.detectionType ?? '-'),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.category, '对象数量', '$count'),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.speed, '平均置信度', avg),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.filter_alt, 'IOU/阈值', '$iou / $thr'),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.timer, '推理耗时(ms)', ms),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.verified, '核查结果', verification),
-              const SizedBox(height: 8),
-              // 缩略图（点击全屏查看处理后图片）
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => FullscreenImagePage(
-                        imageUrl: res.imagePath,
-                        heroTag: 'verify-thumb-${res.id}',
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  height: 140,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  clipBehavior: Clip.hardEdge,
-                  child: () {
-                    final path = res.imagePath;
-                    if (path.isNotEmpty && (path.startsWith('http://') || path.startsWith('https://'))) {
-                      return Image.network(path, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
-                      );
-                    }
-                    if (path.isNotEmpty) {
-                      final f = File(path);
-                      return Image.file(f, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
-                      );
-                    }
-                    return _brokenImagePlaceholder();
-                  }(),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[100]!),
+                ),
+                child: Column(
+                  children: [
+                    _buildInfoRow(Icons.confirmation_number_outlined, '编号', res.id),
+                    const Divider(height: 16),
+                    _buildInfoRow(Icons.model_training, '模型', res.detectionType ?? '-'),
+                    const Divider(height: 16),
+                    _buildInfoRow(Icons.category_outlined, '对象数量', '$count'),
+                    const Divider(height: 16),
+                    _buildInfoRow(Icons.speed, '平均置信度', avg),
+                    const Divider(height: 16),
+                    _buildInfoRow(Icons.filter_alt_outlined, 'IOU/阈值', '$iou / $thr'),
+                    const Divider(height: 16),
+                    _buildInfoRow(Icons.timer_outlined, '推理耗时(ms)', ms),
+                    const Divider(height: 16),
+                    _buildInfoRow(Icons.verified_outlined, '核查结果', verification),
+                  ],
                 ),
               ),
+              const SizedBox(height: 16),
+              // 缩略图（点击全屏查看处理后图片）
+              if (res.imagePath.isNotEmpty) ...[
+                const Text(
+                  '检测结果图',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FullscreenImagePage(
+                          imageUrl: res.imagePath,
+                          heroTag: 'verify-thumb-${res.id}',
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    height: 160,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.hardEdge,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        () {
+                          final path = res.imagePath;
+                          if (path.isNotEmpty && (path.startsWith('http://') || path.startsWith('https://'))) {
+                            return Image.network(path, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
+                            );
+                          }
+                          if (path.isNotEmpty) {
+                            final f = File(path);
+                            return Image.file(f, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
+                            );
+                          }
+                          return _brokenImagePlaceholder();
+                        }(),
+                        Positioned(
+                          bottom: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.fullscreen_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ],
           );
         },

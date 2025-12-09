@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 import 'package:foreignscan/core/providers/home_providers.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
@@ -56,11 +57,11 @@ class _HomePageState extends ConsumerState<HomePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.errorMessage!),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
             duration: const Duration(seconds: 3),
             action: SnackBarAction(
               label: '重试',
-              textColor: Colors.white,
+              textColor: AppTheme.textInverse,
               onPressed: () {
                 homeViewModel.clearError();
                 homeViewModel.refreshData();
@@ -101,6 +102,11 @@ class _HomePageState extends ConsumerState<HomePage> {
     return AppBar(
       // 中文注释：使用 Builder 获取位于 Scaffold 之下的上下文，
       // 通过 Scaffold.of(context).openDrawer() 打开抽屉，避免对 GlobalKey 的依赖。
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: AppTheme.primaryGradient,
+        ),
+      ),
       leading: Builder(
         builder: (ctx) => IconButton(
           icon: const Icon(Icons.menu),
@@ -171,13 +177,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor.withOpacity(0.1),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.settings_ethernet_rounded,
                       size: 48,
-                      color: Theme.of(context).primaryColor,
+                      color: AppTheme.primaryColor,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -190,7 +196,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     '首次使用需连接服务器以同步数据',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[600],
+                      color: AppTheme.textSecondary,
                       fontWeight: FontWeight.normal,
                     ),
                   ),
@@ -210,7 +216,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         filled: true,
-                        fillColor: Colors.grey[50],
+                        fillColor: AppTheme.backgroundLight,
                       ),
                       keyboardType: TextInputType.numberWithOptions(decimal: true),
                     ),
@@ -225,7 +231,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         filled: true,
-                        fillColor: Colors.grey[50],
+                        fillColor: AppTheme.backgroundLight,
                       ),
                       keyboardType: TextInputType.number,
                     ),
@@ -238,15 +244,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                         color: _testMsg == null
                             ? Colors.transparent
                             : (_isTestingServer
-                                ? Colors.blue[50]
-                                : (_testMsg == '连接成功' ? Colors.green[50] : Colors.red[50])),
+                                ? AppTheme.primaryColor.withValues(alpha: 0.05)
+                                : (_testMsg == '连接成功' ? AppTheme.successColor.withValues(alpha: 0.05) : AppTheme.errorColor.withValues(alpha: 0.05))),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: _testMsg == null
                               ? Colors.transparent
                               : (_isTestingServer
-                                  ? Colors.blue[200]!
-                                  : (_testMsg == '连接成功' ? Colors.green[200]! : Colors.red[200]!)),
+                                  ? AppTheme.primaryColor.withValues(alpha: 0.3)
+                                  : (_testMsg == '连接成功' ? AppTheme.successColor.withValues(alpha: 0.3) : AppTheme.errorColor.withValues(alpha: 0.3))),
                         ),
                       ),
                       child: _testMsg == null
@@ -264,8 +270,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                                               : Icons.error_rounded,
                                           size: 20,
                                           color: _testMsg == '连接成功'
-                                              ? Colors.green[700]
-                                              : Colors.red[700],
+                                              ? AppTheme.successColor
+                                              : AppTheme.errorColor,
                                         ),
                                 ),
                                 const SizedBox(width: 10),
@@ -274,10 +280,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                                     _isTestingServer ? '正在测试连接...' : _testMsg!,
                                     style: TextStyle(
                                       color: _isTestingServer
-                                          ? Colors.blue[800]
+                                          ? AppTheme.primaryColor
                                           : (_testMsg == '连接成功'
-                                              ? Colors.green[800]
-                                              : Colors.red[800]),
+                                              ? AppTheme.successColor
+                                              : AppTheme.errorColor),
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -298,7 +304,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         onPressed: () => Navigator.of(ctx).pop(),
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          foregroundColor: Colors.grey[600],
+                          foregroundColor: AppTheme.textSecondary,
                         ),
                         child: const Text('稍后再说'),
                       ),
@@ -358,7 +364,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text('服务器已配置成功'),
-                                      backgroundColor: Colors.green,
+                                      backgroundColor: AppTheme.successColor,
                                       behavior: SnackBarBehavior.floating,
                                     ),
                                   );
@@ -371,7 +377,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Theme.of(context).primaryColor,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppTheme.textInverse,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -428,7 +434,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('没有可上传的图片，请先拍摄照片'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppTheme.warningColor,
         ),
       );
       return;
@@ -465,14 +471,14 @@ class _HomePageState extends ConsumerState<HomePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('图片上传成功'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('图片上传失败，请检查网络连接和服务器设置'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorColor,
             ),
           );
         }
@@ -483,7 +489,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('上传出错: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -501,19 +507,19 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.inbox, size: 64, color: Colors.grey),
+            const Icon(Icons.inbox, size: 64, color: AppTheme.dividerColor),
             const SizedBox(height: 16),
             Text(
               '暂无场景数据',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Colors.grey,
+                color: AppTheme.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               '请联系管理员添加检测场景',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey,
+                color: AppTheme.textSecondary,
               ),
             ),
             const SizedBox(height: 24),
@@ -587,7 +593,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('暂无可用检测场景'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppTheme.warningColor,
         ),
       );
       return;
@@ -599,7 +605,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('请选择检测场景开始检测'),
-        backgroundColor: Colors.green,
+        backgroundColor: AppTheme.successColor,
       ),
     );
   }
@@ -626,7 +632,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('照片拍摄成功'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
             ),
           );
         }
@@ -636,7 +642,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('相机初始化失败: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -652,7 +658,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('请先拍摄该场景'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppTheme.warningColor,
         ),
       );
       return;
@@ -690,7 +696,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('传输成功'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
             ),
           );
           
@@ -730,7 +736,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('传输失败，请检查网络连接和服务器设置'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorColor,
             ),
           );
         }
@@ -741,7 +747,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('传输出错: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -764,7 +770,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('没有需要传输的场景'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppTheme.warningColor,
         ),
       );
       return;
@@ -855,7 +861,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('全部传输完成：成功 $completed，失败 $failed'),
-                      backgroundColor: failed == 0 ? Colors.green : Colors.orange,
+                      backgroundColor: failed == 0 ? AppTheme.successColor : AppTheme.warningColor,
                     ),
                   );
                 }

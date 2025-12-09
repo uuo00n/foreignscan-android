@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/providers/app_info_providers.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 
 /// “关于应用”对话框
 /// - 展示应用名称、版本+构建号、包名、后端 API 地址
@@ -65,7 +66,7 @@ class AboutAppDialog extends ConsumerWidget {
               const SizedBox(height: 12),
               Text(
                 '$e',
-                style: const TextStyle(color: Colors.red, fontSize: 12),
+                style: const TextStyle(color: AppTheme.errorColor, fontSize: 12),
               ),
             ],
           );

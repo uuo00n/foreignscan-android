@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/scene_data.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 
 class SceneTile extends StatelessWidget {
   final SceneData scene;
@@ -20,21 +21,45 @@ class SceneTile extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           border: Border.all(
-            color: isSelected ? Colors.blue : Colors.grey[300]!,
-            width: isSelected ? 3 : 1,
+            color: isSelected ? AppTheme.primaryColor : AppTheme.dividerColor,
+            width: isSelected ? 2 : 1,
           ),
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.grey[200],
+          borderRadius: BorderRadius.circular(12),
+          color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.05) : AppTheme.surfaceLight,
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : null,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.videocam, size: 32, color: Colors.grey[600]),
-            SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.1) : AppTheme.backgroundLight,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.videocam_rounded,
+                size: 24,
+                color: isSelected ? AppTheme.primaryColor : AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
             // 显示场景名称，不再显示场景ID
             Text(
               scene.name, // 使用名称替代ID
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? AppTheme.primaryColor : AppTheme.textPrimary,
+              ),
               overflow: TextOverflow.ellipsis, // 名称过长时省略
               maxLines: 1,
             ),

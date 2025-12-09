@@ -1,6 +1,7 @@
 // ==================== lib/widgets/scene_display.dart ====================
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:foreignscan/core/theme/app_theme.dart';
 import '../models/scene_data.dart';
 import '../screens/fullscreen_image_page.dart';
 
@@ -26,26 +27,30 @@ class SceneDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释：统一两个操作按钮的公共样式，避免尺寸不一致（统一最小尺寸与内边距）
     final ButtonStyle commonButtonStyle = ElevatedButton.styleFrom(
-      foregroundColor: Colors.white,
+      foregroundColor: AppTheme.textInverse,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      minimumSize: const Size(140, 44), // 统一最小宽高，避免大小不一致
+      minimumSize: const Size(140, 50), // 统一最小宽高，避免大小不一致
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
 
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        color: AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: scene.isTransferred ? Colors.green[200]! : Colors.black12,
-            blurRadius: 4,
-            offset: Offset(0, 2),
+            color: scene.isTransferred 
+                ? AppTheme.successColor.withValues(alpha: 0.1) 
+                : AppTheme.shadowColor,
+            blurRadius: 10,
+            offset: Offset(0, 4),
           ),
         ],
         border: Border.all(
-          color: scene.isTransferred ? Colors.green : Colors.grey[300]!,
-          width: scene.isTransferred ? 2 : 1,
+          color: scene.isTransferred ? AppTheme.successColor.withValues(alpha: 0.5) : Colors.transparent,
+          width: scene.isTransferred ? 1.5 : 0,
         ),
       ),
       child: Column(
@@ -53,40 +58,84 @@ class SceneDisplay extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(
-                '场景：${scene.id} - ${scene.name}',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              if (scene.isTransferred) ...[
-                SizedBox(width: 8),
-                Icon(
-                  Icons.check_circle,
-                  color: Colors.green,
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.image_search_rounded,
+                  color: AppTheme.primaryColor,
                   size: 20,
                 ),
-                SizedBox(width: 4),
-                Text(
-                  '已传输',
-                  style: TextStyle(
-                    color: Colors.green,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '当前场景',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      '${scene.id} - ${scene.name}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              if (scene.isTransferred) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppTheme.successColor.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle_rounded,
+                        color: AppTheme.successColor,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '已传输',
+                        style: TextStyle(
+                          color: AppTheme.successColor,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ],
           ),
-          SizedBox(height: 16),
+          SizedBox(height: 24),
           Expanded(
             child: Row(
               children: [
                 Expanded(child: _buildReferenceImage(context)),
-                SizedBox(width: 16),
+                SizedBox(width: 20),
                 Expanded(child: _buildCaptureArea(context)),
               ],
             ),
           ),
-          SizedBox(height: 16),
+          SizedBox(height: 24),
           // 中文注释：操作按钮行（右对齐）：左侧“全部传输”，右侧“确认/重新传输”
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -94,22 +143,22 @@ class SceneDisplay extends StatelessWidget {
               if (onTransferAll != null) ...[
                 ElevatedButton.icon(
                   onPressed: onTransferAll,
-                  icon: const Icon(Icons.cloud_upload),
+                  icon: const Icon(Icons.cloud_upload_outlined),
                   label: const Text('全部传输'),
                   style: commonButtonStyle.copyWith(
                     // 中文注释：仅改变背景色，其他尺寸样式保持一致
-                    backgroundColor: MaterialStateProperty.all(Colors.purple),
+                    backgroundColor: MaterialStateProperty.all(AppTheme.accentIndigo),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
               ],
               ElevatedButton.icon(
                 onPressed: onConfirmTransfer,
-                icon: Icon(scene.isTransferred ? Icons.refresh : Icons.check_circle),
+                icon: Icon(scene.isTransferred ? Icons.refresh_rounded : Icons.check_circle_outline),
                 label: Text(scene.isTransferred ? '重新传输' : '确认传输'),
                 style: commonButtonStyle.copyWith(
                   backgroundColor: MaterialStateProperty.all(
-                    scene.isTransferred ? Colors.orange : Colors.blue,
+                    scene.isTransferred ? AppTheme.warningColor : AppTheme.primaryColor,
                   ),
                 ),
               ),
@@ -127,38 +176,40 @@ class SceneDisplay extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.grey[600],
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            '模板参考图',
-            style: TextStyle(color: Colors.white, fontSize: 12),
-          ),
+        Row(
+          children: [
+            Icon(Icons.photo_library_outlined, size: 16, color: AppTheme.textSecondary),
+            const SizedBox(width: 8),
+            Text(
+              '模板参考图',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ],
         ),
-        SizedBox(height: 8),
+        SizedBox(height: 12),
         Expanded(
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[300]!),
+              color: AppTheme.backgroundLight,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.dividerColor),
             ),
             // 中文说明：
             // 优先展示“加载动画”；若非加载且有URL/路径则展示图片；否则展示占位
             child: isReferenceLoading
-                ? const Center(
+                ? Center(
                     child: SizedBox(
                       width: 32,
                       height: 32,
-                      child: CircularProgressIndicator(),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                      ),
                     ),
                   )
                 : (referenceImageUrl != null && referenceImageUrl!.isNotEmpty)
                     ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                         child: GestureDetector(
                           onTap: () {
                             final pathOrUrl = referenceImageUrl!;
@@ -172,9 +223,26 @@ class SceneDisplay extends StatelessWidget {
                               ),
                             );
                           },
-                          child: Hero(
-                            tag: referenceImageUrl!,
-                            child: _buildReferenceImageContent(referenceImageUrl!),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Hero(
+                                tag: referenceImageUrl!,
+                                child: _buildReferenceImageContent(referenceImageUrl!),
+                              ),
+                              Positioned(
+                                bottom: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.5),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.fullscreen, color: Colors.white, size: 20),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       )
@@ -182,9 +250,12 @@ class SceneDisplay extends StatelessWidget {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.image, size: 64, color: Colors.grey[400]),
-                            SizedBox(height: 8),
-                            Text('暂无模板参考图', style: TextStyle(color: Colors.grey[600])),
+                            Icon(Icons.image_not_supported_outlined, size: 48, color: AppTheme.dividerColor),
+                            SizedBox(height: 12),
+                            Text(
+                              '暂无模板参考图',
+                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                            ),
                           ],
                         ),
                       ),
@@ -223,9 +294,9 @@ class SceneDisplay extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.broken_image, size: 48, color: Colors.grey[400]),
+                Icon(Icons.broken_image, size: 48, color: AppTheme.textSecondary.withValues(alpha: 0.5)),
                 SizedBox(height: 8),
-                Text('参考图加载失败', style: TextStyle(color: Colors.grey[600])),
+                Text('参考图加载失败', style: TextStyle(color: AppTheme.textSecondary)),
               ],
             ),
           );
@@ -246,9 +317,9 @@ class SceneDisplay extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.broken_image, size: 48, color: Colors.grey[400]),
+                Icon(Icons.broken_image, size: 48, color: AppTheme.textSecondary.withValues(alpha: 0.5)),
                 SizedBox(height: 8),
-                Text('参考图加载失败', style: TextStyle(color: Colors.grey[600])),
+                Text('参考图加载失败', style: TextStyle(color: AppTheme.textSecondary)),
               ],
             ),
           );
@@ -261,9 +332,9 @@ class SceneDisplay extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.image, size: 64, color: Colors.grey[400]),
+          Icon(Icons.image, size: 64, color: AppTheme.textSecondary.withValues(alpha: 0.5)),
           SizedBox(height: 8),
-          Text('暂无模板参考图', style: TextStyle(color: Colors.grey[600])),
+          Text('暂无模板参考图', style: TextStyle(color: AppTheme.textSecondary)),
         ],
       ),
     );
@@ -276,12 +347,12 @@ class SceneDisplay extends StatelessWidget {
         Container(
           padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.grey[600],
+            color: AppTheme.primaryColor.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
             '实时拍摄',
-            style: TextStyle(color: Colors.white, fontSize: 12),
+            style: TextStyle(color: AppTheme.textInverse, fontSize: 12),
           ),
         ),
         SizedBox(height: 8),
@@ -290,9 +361,9 @@ class SceneDisplay extends StatelessWidget {
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey[200],
+                  color: AppTheme.backgroundLight,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[300]!),
+                  border: Border.all(color: AppTheme.dividerColor),
                 ),
                 child: scene.capturedImage != null
                     ? ClipRRect(
@@ -325,7 +396,7 @@ class SceneDisplay extends StatelessWidget {
                   child: Text(
                     '请拍摄该场景',
                     style: TextStyle(
-                      color: Colors.grey[600],
+                      color: AppTheme.textSecondary,
                       fontSize: 16,
                     ),
                   ),
@@ -336,8 +407,8 @@ class SceneDisplay extends StatelessWidget {
                 bottom: 16,
                 child: FloatingActionButton(
                   onPressed: onCaptureClick,
-                  backgroundColor: Colors.blue,
-                  child: Icon(Icons.camera_alt, color: Colors.white),
+                  backgroundColor: AppTheme.primaryColor,
+                  child: Icon(Icons.camera_alt, color: AppTheme.textInverse),
                 ),
               ),
             ],

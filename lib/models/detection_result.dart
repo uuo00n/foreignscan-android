@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 
 class DetectionResult extends Equatable {
   final String id;
@@ -279,10 +280,10 @@ enum IssueType {
 }
 
 enum IssueSeverity {
-  low('low', '低', Colors.blue),
-  medium('medium', '中', Colors.orange),
-  high('high', '高', Colors.red),
-  critical('critical', '严重', Colors.purple);
+  low('low', '低', AppTheme.accentBlueLight),
+  medium('medium', '中', AppTheme.warningColor),
+  high('high', '高', AppTheme.errorColor),
+  critical('critical', '严重', AppTheme.accentIndigo);
 
   const IssueSeverity(this.value, this.displayName, this.color);
   

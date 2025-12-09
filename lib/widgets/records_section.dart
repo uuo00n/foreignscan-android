@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/inspection_record.dart';
 import 'dart:io';
 import 'package:foreignscan/screens/record_detail_page.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 
 class RecordsSection extends StatelessWidget {
   final List<InspectionRecord> records;
@@ -25,33 +26,74 @@ class RecordsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 280,
-      padding: EdgeInsets.all(16),
-      color: Colors.white,
+      height: 320, // Increased height for better spacing
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: AppTheme.surfaceLight,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '拍摄记录',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.history_rounded,
+                      color: AppTheme.primaryColor,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    '拍摄记录',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
               ),
               if (records.isNotEmpty)
-                Text(
-                  '左右滑动查看更多',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.swipe_outlined, size: 14, color: AppTheme.textSecondary),
+                      const SizedBox(width: 4),
+                      Text(
+                        '左右滑动',
+                        style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                      ),
+                    ],
+                  ),
                 ),
             ],
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 16),
           Expanded(
             child: records.isEmpty
                 ? Center(
-                    child: Text(
-                      '暂无拍摄记录',
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.history, size: 48, color: AppTheme.dividerColor),
+                        const SizedBox(height: 8),
+                        Text(
+                          '暂无拍摄记录',
+                          style: TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.5), fontSize: 14),
+                        ),
+                      ],
                     ),
                   )
                 : _buildRecordsList(),
@@ -64,13 +106,10 @@ class RecordsSection extends StatelessWidget {
   Widget _buildRecordsList() {
     return PageView.builder(
       controller: PageController(
-        viewportFraction: 0.35,
+        viewportFraction: 0.4,
         initialPage: currentPage,
       ),
       padEnds: false,
-      // 移除onPageChanged回调，避免滑动时的状态更新导致卡顿
-      // PageView自身会处理页面切换，不需要额外的状态更新
-      
       itemCount: records.length,
       itemBuilder: (context, index) {
         return _buildRecordCard(context, records[index]);
@@ -82,70 +121,85 @@ class RecordsSection extends StatelessWidget {
   /// 中文说明：
   /// - 点击卡片跳转到“拍摄记录详情页”，查看大图与详细信息
   Widget _buildRecordCard(BuildContext context, InspectionRecord record) {
-    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+    final dateFormat = DateFormat('MM-dd HH:mm');
 
-    return InkWell(
-      onTap: () {
-        // 点击进入详情页
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => RecordDetailPage(record: record),
+    return Container(
+      margin: const EdgeInsets.only(right: 12, bottom: 8), // Added bottom margin for shadow
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceLight,
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryColor.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
-        );
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[300]!),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[800],
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+        ],
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            // 点击进入详情页
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => RecordDetailPage(record: record),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: AppTheme.backgroundLight,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  child: _buildImage(record.imagePath),
                 ),
-                // 图片显示逻辑改造：
-                // 1) 若 imagePath 为完整URL（http/https），使用 Image.network 加载网络图片
-                // 2) 若为本地路径（非空且文件存在），使用 Image.file 加载本地图片
-                // 3) 否则显示占位图标
-                child: _buildImage(record.imagePath),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 文案优化：拍摄记录中不显示ID，仅展示场景名称
-                  Text(
-                    record.sceneName,
-                    style: TextStyle(fontWeight: FontWeight.bold),
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // 文案优化：拍摄记录中不显示ID，仅展示场景名称
+                      Text(
+                        record.sceneName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Row(
+                        children: [
+                          Icon(Icons.access_time, size: 12, color: AppTheme.textSecondary),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              dateFormat.format(record.timestamp),
+                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                      _buildStatusChip(record.status),
+                    ],
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    dateFormat.format(record.timestamp),
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
-                  SizedBox(height: 4),
-                  _buildStatusChip(record.status),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -156,29 +210,48 @@ class RecordsSection extends StatelessWidget {
     final String label;
     Color bg;
     Color fg;
+    IconData icon;
+
     switch (rawStatus) {
       case '存在缺陷':
       case '异常':
-        label = '已检测·异常';
-        bg = Colors.red[100]!;
-        fg = Colors.red[700]!;
+        label = '异常';
+        bg = AppTheme.errorColor.withValues(alpha: 0.1);
+        fg = AppTheme.errorColor;
+        icon = Icons.warning_amber_rounded;
         break;
       case '已检测':
       case '合格':
-        label = '已检测·合格';
-        bg = Colors.green[100]!;
-        fg = Colors.green[700]!;
+        label = '合格';
+        bg = AppTheme.successColor.withValues(alpha: 0.1);
+        fg = AppTheme.successColor;
+        icon = Icons.check_circle_outline;
         break;
       default:
         label = '未检测';
-        bg = Colors.grey[200]!;
-        fg = Colors.grey[700]!;
+        bg = AppTheme.surfaceLight;
+        fg = AppTheme.textSecondary;
+        icon = Icons.help_outline;
         break;
     }
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
-      child: Text(label, style: TextStyle(color: fg, fontSize: 12)),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        border: rawStatus == '未检测' ? Border.all(color: AppTheme.dividerColor) : Border.all(color: fg.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
     );
   }
 
@@ -191,7 +264,7 @@ class RecordsSection extends StatelessWidget {
   Widget _buildImage(String imagePath) {
     if (imagePath.isNotEmpty && (imagePath.startsWith('http://') || imagePath.startsWith('https://'))) {
       return ClipRRect(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         child: Image.network(
           imagePath,
           fit: BoxFit.cover,
@@ -200,9 +273,9 @@ class RecordsSection extends StatelessWidget {
           errorBuilder: (context, error, stack) {
             return Center(
               child: Icon(
-                Icons.broken_image,
-                size: 48,
-                color: Colors.orange,
+                Icons.broken_image_rounded,
+                size: 32,
+                color: AppTheme.textSecondary.withValues(alpha: 0.5),
               ),
             );
           },
@@ -214,7 +287,7 @@ class RecordsSection extends StatelessWidget {
       final file = File(imagePath);
       if (file.existsSync()) {
         return ClipRRect(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           child: Image.file(
             file,
             fit: BoxFit.cover,
@@ -223,9 +296,9 @@ class RecordsSection extends StatelessWidget {
             errorBuilder: (context, error, stack) {
               return Center(
                 child: Icon(
-                  Icons.broken_image,
-                  size: 48,
-                  color: Colors.orange,
+                  Icons.broken_image_rounded,
+                  size: 32,
+                  color: AppTheme.textSecondary.withValues(alpha: 0.5),
                 ),
               );
             },
@@ -236,20 +309,9 @@ class RecordsSection extends StatelessWidget {
 
     return Center(
       child: Icon(
-        Icons.image,
-        size: 48,
-        color: Colors.orange,
-      ),
-    );
-  }
-
-  Widget _buildPageButton(IconData icon, VoidCallback? onPressed) {
-    return IconButton(
-      icon: Icon(icon),
-      onPressed: onPressed,
-      style: IconButton.styleFrom(
-        backgroundColor: onPressed != null ? Colors.grey[300] : Colors.grey[200],
-        disabledBackgroundColor: Colors.grey[200],
+        Icons.image_not_supported_rounded,
+        size: 32,
+        color: AppTheme.dividerColor,
       ),
     );
   }

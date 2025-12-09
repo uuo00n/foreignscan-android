@@ -5,6 +5,7 @@ import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:camera/camera.dart';
 import 'package:foreignscan/core/providers/camera_providers.dart' as camera_providers;
+import 'package:foreignscan/core/theme/app_theme.dart';
 
 class ImageUploadScreen extends ConsumerStatefulWidget {
   final String? imagePath;
@@ -121,6 +122,11 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: AppTheme.primaryGradient,
+          ),
+        ),
         title: const Text('图片上传'),
       ),
       body: SingleChildScrollView(
@@ -250,7 +256,7 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('上传成功', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                      const Text('上传成功', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.successColor)),
                       const SizedBox(height: 8),
                       Text('图片URL: $_uploadedImageUrl'),
                       const SizedBox(height: 16),

@@ -7,6 +7,7 @@ import 'package:logger/logger.dart';
 import 'package:foreignscan/core/providers/app_info_providers.dart';
 import 'package:foreignscan/widgets/about_app_dialog.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   final Function() onUploadPressed;
@@ -130,8 +131,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
+            decoration: const BoxDecoration(
+              gradient: AppTheme.primaryGradient,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,8 +140,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 const Text(
                   '智能防异物检测系统',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.textInverse,
                     fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -154,7 +156,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   return Text(
                     versionText,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
+                      color: AppTheme.textInverse.withValues(alpha: 0.8),
                       fontSize: 14,
                     ),
                   );
@@ -163,8 +165,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             ),
           ),
           ExpansionTile(
-            leading: const Icon(Icons.wifi),
+            leading: const Icon(Icons.wifi, color: AppTheme.primaryColor),
             title: const Text('WiFi状态'),
+            collapsedIconColor: AppTheme.primaryColor,
+            iconColor: AppTheme.primaryColor,
+            textColor: AppTheme.primaryColor,
+            collapsedTextColor: AppTheme.textPrimary,
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -187,8 +193,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             ],
           ),
           ExpansionTile(
-            leading: const Icon(Icons.computer),
+            leading: const Icon(Icons.computer, color: AppTheme.primaryColor),
             title: const Text('服务器设置'),
+            collapsedIconColor: AppTheme.primaryColor,
+            iconColor: AppTheme.primaryColor,
+            textColor: AppTheme.primaryColor,
+            collapsedTextColor: AppTheme.textPrimary,
             children: [
               Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -239,14 +249,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             child: _isConnecting
                                 ? Row(
                                     // 中文注释：连接中状态使用常量 Key 即可，因已通过 _isConnecting 防并发
-                                    key: ValueKey('connecting'),
+                                    key: const ValueKey('connecting'),
                                     children: const [
-                                      Icon(Icons.wifi, color: Colors.blue, size: 18),
+                                      Icon(Icons.wifi, color: AppTheme.primaryColor, size: 18),
                                       SizedBox(width: 6),
                                       Expanded(
                                         child: Text(
                                           '正在连接...',
-                                          style: TextStyle(color: Colors.blue),
+                                          style: TextStyle(color: AppTheme.primaryColor),
                                           overflow: TextOverflow.ellipsis,
                                           maxLines: 1,
                                         ),
@@ -263,7 +273,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                             _isConnected
                                                 ? Icons.check_circle
                                                 : Icons.error_outline,
-                                            color: _isConnected ? Colors.green : Colors.red,
+                                            color: _isConnected ? AppTheme.successColor : AppTheme.errorColor,
                                             size: 18,
                                           ),
                                           const SizedBox(width: 6),
@@ -271,7 +281,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                             child: Text(
                                               _testStatusText ?? (_isConnected ? '连接成功' : '连接失败'),
                                               style: TextStyle(
-                                                color: _isConnected ? Colors.green : Colors.red,
+                                                color: _isConnected ? AppTheme.successColor : AppTheme.errorColor,
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w500,
                                               ),
@@ -294,7 +304,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           const Divider(),
           // 中文注释：新增“与服务器同步数据”按钮，提供手动同步入口
           ListTile(
-            leading: const Icon(Icons.sync),
+            leading: const Icon(Icons.sync, color: AppTheme.primaryColor),
             title: const Text('同步数据'),
             trailing: _isSyncing
                 ? const SizedBox(
@@ -307,7 +317,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           ),
           const Divider(),
           ListTile(
-            leading: const Icon(Icons.settings),
+            leading: const Icon(Icons.settings, color: AppTheme.primaryColor),
             title: const Text('设置'),
             onTap: () {
               // TODO: 导航到设置页面
@@ -315,7 +325,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.info),
+            leading: const Icon(Icons.info, color: AppTheme.primaryColor),
             title: const Text('关于'),
             onTap: () {
               // 中文注释：防重复点击。如果“关于”对话框正在显示或排队显示，则直接返回。
@@ -408,7 +418,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         content: Text(isOnline
             ? '同步完成：已与服务器通信并更新数据'
             : '离线刷新完成：已更新本地缓存数据（未与服务器通信）'),
-        backgroundColor: isOnline ? Colors.green : Colors.orange,
+        backgroundColor: isOnline ? AppTheme.successColor : AppTheme.warningColor,
       ));
 
       if (mounted) {
@@ -435,7 +445,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       final sc = ScaffoldMessenger.of(AppRouter.navigatorKey.currentContext ?? context);
       sc.showSnackBar(SnackBar(
         content: Text('同步失败：$e'),
-        backgroundColor: Colors.red,
+        backgroundColor: AppTheme.errorColor,
       ));
     }
   }

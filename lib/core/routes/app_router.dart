@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:foreignscan/config/app_constants.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 import 'package:foreignscan/screens/home_page.dart';
 import 'package:foreignscan/screens/camera_screen.dart';
 import 'package:foreignscan/screens/detection_result_screen.dart';
@@ -73,7 +74,7 @@ class AppRouter {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const Icon(Icons.error_outline, size: 64, color: AppTheme.errorColor),
               const SizedBox(height: 16),
               Text(
                 '页面未找到: ${settings.name}',

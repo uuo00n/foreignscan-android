@@ -31,7 +31,7 @@ class AppBarActions extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 // 中文注释：使用更协调的浅蓝（accentBlueLight）作为“新建检测”的背景色
                 backgroundColor: AppTheme.accentBlueLight,
-                foregroundColor: Colors.white,
+                foregroundColor: AppTheme.textInverse,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
             ),
@@ -47,7 +47,7 @@ class AppBarActions extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 // 中文注释：使用靛蓝（accentIndigo）作为“检测结果”的背景色，避免与主色完全一致导致视觉层级混乱
                 backgroundColor: AppTheme.accentIndigo,
-                foregroundColor: Colors.white,
+                foregroundColor: AppTheme.textInverse,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
             ),
@@ -63,7 +63,7 @@ class AppBarActions extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('请选择检测场景开始检测'),
-        backgroundColor: Colors.green,
+        backgroundColor: AppTheme.successColor,
       ),
     );
   }
@@ -116,7 +116,7 @@ class AppBarBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: Icon(Icons.arrow_back, color: color ?? Colors.white),
+      icon: Icon(Icons.arrow_back, color: color ?? AppTheme.textInverse),
       onPressed: onPressed ?? () => Navigator.pop(context),
     );
   }

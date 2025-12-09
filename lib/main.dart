@@ -31,7 +31,7 @@ class IndustrialInspectionApp extends ConsumerWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('网络连接已断开'),
-              backgroundColor: Colors.orange,
+              backgroundColor: AppTheme.warningColor,
             ),
           );
         }

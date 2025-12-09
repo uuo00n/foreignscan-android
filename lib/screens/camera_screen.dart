@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 import 'package:foreignscan/core/providers/camera_providers.dart';
 import 'package:foreignscan/core/widgets/loading_widget.dart';
 import 'package:foreignscan/core/widgets/error_widget.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -424,7 +425,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                             height: 44,
                                             decoration: BoxDecoration(
                                               border: Border.all(
-                                                color: _focusLocked ? Colors.green : Colors.white,
+                                                color: _focusLocked ? AppTheme.successColor : Colors.white,
                                                 width: 2,
                                               ),
                                             ),

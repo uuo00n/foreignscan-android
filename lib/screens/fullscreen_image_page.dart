@@ -1,6 +1,7 @@
 // ==================== lib/screens/fullscreen_image_page.dart ====================
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:foreignscan/core/theme/app_theme.dart';
 
 /// 全屏图片查看页面
 /// - 支持网络图片的缩放与拖拽查看（InteractiveViewer）
@@ -18,7 +19,7 @@ class FullscreenImagePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppTheme.backgroundDark,
       body: SafeArea(
         // 使用 Stack 叠加关闭按钮与图片区域
         child: Stack(
@@ -46,7 +47,7 @@ class FullscreenImagePage extends StatelessWidget {
               top: 8,
               right: 8,
               child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
+                icon: const Icon(Icons.close, color: AppTheme.textInverse),
                 onPressed: () => Navigator.of(context).pop(),
                 tooltip: '关闭',
               ),
@@ -71,19 +72,19 @@ class FullscreenImagePage extends StatelessWidget {
           if (loadingProgress == null) return child; // 已完成加载，直接返回图片
           // 加载中展示进度圈
           return const Center(
-            child: CircularProgressIndicator(color: Colors.white),
+            child: CircularProgressIndicator(color: AppTheme.textInverse),
           );
         },
         errorBuilder: (context, error, stackTrace) {
           // 加载失败时展示提示
           return Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.broken_image, size: 64, color: Colors.white70),
+            children: [
+              Icon(Icons.broken_image, size: 64, color: AppTheme.textInverse.withValues(alpha: 0.7)),
               SizedBox(height: 12),
               Text(
                 '图片加载失败',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(color: AppTheme.textInverse.withValues(alpha: 0.7), fontSize: 14),
               ),
             ],
           );
@@ -99,12 +100,12 @@ class FullscreenImagePage extends StatelessWidget {
         errorBuilder: (context, error, stackTrace) {
           return Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.broken_image, size: 64, color: Colors.white70),
+            children: [
+              Icon(Icons.broken_image, size: 64, color: AppTheme.textInverse.withValues(alpha: 0.7)),
               SizedBox(height: 12),
               Text(
                 '图片加载失败',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(color: AppTheme.textInverse.withValues(alpha: 0.7), fontSize: 14),
               ),
             ],
           );
@@ -115,12 +116,12 @@ class FullscreenImagePage extends StatelessWidget {
     // 兜底：路径无效
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: const [
-        Icon(Icons.broken_image, size: 64, color: Colors.white70),
+      children: [
+        Icon(Icons.broken_image, size: 64, color: AppTheme.textInverse.withValues(alpha: 0.7)),
         SizedBox(height: 12),
         Text(
           '图片不存在',
-          style: TextStyle(color: Colors.white70, fontSize: 14),
+          style: TextStyle(color: AppTheme.textInverse.withValues(alpha: 0.7), fontSize: 14),
         ),
       ],
     );

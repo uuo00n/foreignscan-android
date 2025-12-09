@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 
 class ErrorWidgetCustom extends StatelessWidget {
   final String message;
@@ -25,21 +26,21 @@ class ErrorWidgetCustom extends StatelessWidget {
             Icon(
               icon ?? Icons.error_outline,
               size: 64,
-              color: Colors.red[300],
+              color: AppTheme.errorColor.withValues(alpha: 0.7),
             ),
             const SizedBox(height: 16),
             Text(
               '出错了',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Colors.red[700],
+                color: AppTheme.errorColor,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               message,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
+                color: AppTheme.textSecondary,
               ),
               textAlign: TextAlign.center,
             ),
@@ -50,7 +51,7 @@ class ErrorWidgetCustom extends StatelessWidget {
                 icon: const Icon(Icons.refresh),
                 label: Text(buttonText ?? '重试'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
+                  backgroundColor: AppTheme.primaryColor,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,

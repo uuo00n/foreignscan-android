@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
 import '../models/scene_data.dart';
 import 'scene_tile.dart';
 
@@ -20,31 +21,52 @@ class SceneSelector extends StatelessWidget {
       width: 280,
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        color: AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: Offset(0, 2),
+            color: AppTheme.shadowColor,
+            blurRadius: 10,
+            offset: Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '场景选择',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.grid_view_rounded,
+                  color: AppTheme.primaryColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                '场景选择',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
           ),
           SizedBox(height: 16),
           Expanded(
             child: GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: 1,
+                crossAxisCount: 2, // Changed to 2 for better visibility
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 0.9,
               ),
               itemCount: scenes.length,
               itemBuilder: (context, index) {
@@ -58,17 +80,6 @@ class SceneSelector extends StatelessWidget {
           ),
           SizedBox(height: 8),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPageButton(IconData icon, VoidCallback? onPressed) {
-    return IconButton(
-      icon: Icon(icon),
-      onPressed: onPressed,
-      style: IconButton.styleFrom(
-        backgroundColor: onPressed != null ? Colors.grey[300] : Colors.grey[200],
-        disabledBackgroundColor: Colors.grey[200],
       ),
     );
   }

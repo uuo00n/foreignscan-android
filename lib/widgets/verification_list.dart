@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:intl/intl.dart';
 import '../models/verification_record.dart';
+import 'package:foreignscan/core/theme/app_theme.dart';
+
+import 'package:foreignscan/screens/fullscreen_image_page.dart';
 
 class VerificationList extends StatelessWidget {
   final List<VerificationRecord> records;
@@ -16,34 +19,52 @@ class VerificationList extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        color: AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: Offset(0, 2),
+            color: AppTheme.shadowColor,
+            blurRadius: 10,
+            offset: Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '核查记录',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.fact_check_rounded,
+                  color: AppTheme.primaryColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                '核查记录',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
           ),
           SizedBox(height: 16),
-  Expanded(
+          Expanded(
             child: records.isEmpty
                 ? Center(
                     child: Text(
                       '请先选择一个实体',
                       style: TextStyle(
-                        color: Colors.grey,
+                        color: AppTheme.textSecondary,
                         fontSize: 16,
                       ),
                     ),
@@ -65,58 +86,71 @@ class VerificationList extends StatelessWidget {
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
     // 中文注释：将文字信息置顶，图片在下方，占据整行宽度
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.dividerColor),
+      ),
+      padding: EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 中文注释：顶部文字信息
-          Text(
-            '编号：${record.id}',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '编号：${record.id}',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _getStatusColor(record.verificationResult),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  record.verificationResult,
+                  style: TextStyle(
+                    color: _getStatusTextColor(record.verificationResult),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 4),
-          Text(record.sceneName, style: TextStyle(fontSize: 13)),
-          SizedBox(height: 4),
-          Text(
-            '时间：${dateFormat.format(record.timestamp)}',
-            style: TextStyle(color: Colors.grey[600], fontSize: 12),
-          ),
-          SizedBox(height: 4),
-          Text('状态：${record.verificationResult}', style: TextStyle(fontSize: 12)),
           SizedBox(height: 8),
+          Text(
+            record.sceneName,
+            style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+          ),
+          SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(Icons.access_time, size: 12, color: AppTheme.textSecondary),
+              SizedBox(width: 4),
+              Text(
+                dateFormat.format(record.timestamp),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+              ),
+            ],
+          ),
+          SizedBox(height: 12),
           // 中文注释：下方拍摄图片，点击进入全屏预览
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: GestureDetector(
               onTap: () {
-                showDialog(
-                  context: context,
-                  builder: (_) {
-                    return Dialog(
-                      backgroundColor: Colors.black,
-                      insetPadding: EdgeInsets.zero,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: InteractiveViewer(
-                              minScale: 1.0,
-                              maxScale: 5.0,
-                              child: _buildImage(record.imagePath, fit: BoxFit.contain, errorTextColor: Colors.white70),
-                            ),
-                          ),
-                          Positioned(
-                            top: 16,
-                            right: 16,
-                            child: IconButton(
-                              icon: Icon(Icons.close, color: Colors.white),
-                              onPressed: () => Navigator.of(context).pop(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => FullscreenImagePage(
+                      imageUrl: record.imagePath,
+                    ),
+                  ),
                 );
               },
               child: SizedBox(
@@ -131,15 +165,15 @@ class VerificationList extends StatelessWidget {
     );
   }
 
-  Widget _buildImage(String path, {BoxFit fit = BoxFit.cover, Color? errorTextColor}) {
+  Widget _buildImage(String path, {BoxFit fit = BoxFit.cover}) {
     final bool isNetwork = path.startsWith('http://') || path.startsWith('https://');
     final Widget error = Container(
-      color: Colors.grey[300],
+      color: AppTheme.backgroundLight,
       child: Center(
         child: Icon(
           Icons.broken_image,
           size: 28,
-          color: Colors.orange,
+          color: AppTheme.warningColor,
         ),
       ),
     );
@@ -162,22 +196,22 @@ class VerificationList extends StatelessWidget {
   Color _getStatusColor(String status) {
     switch (status) {
       case '已确认':
-        return Colors.green[100]!;
+        return AppTheme.successColor.withValues(alpha: 0.1);
       case '异常':
-        return Colors.red[100]!;
+        return AppTheme.errorColor.withValues(alpha: 0.1);
       default:
-        return Colors.grey[200]!;
+        return AppTheme.textSecondary.withValues(alpha: 0.1);
     }
   }
 
   Color _getStatusTextColor(String status) {
     switch (status) {
       case '已确认':
-        return Colors.green[700]!;
+        return AppTheme.successColor;
       case '异常':
-        return Colors.red[700]!;
+        return AppTheme.errorColor;
       default:
-        return Colors.grey[700]!;
+        return AppTheme.textSecondary;
     }
   }
 }
