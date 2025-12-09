@@ -63,7 +63,7 @@ class SceneSelector extends StatelessWidget {
           Expanded(
             child: GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, // Changed to 2 for better visibility
+                crossAxisCount: 3, // Changed to 3 for better visibility
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
                 childAspectRatio: 0.9,

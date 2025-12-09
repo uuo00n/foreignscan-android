@@ -28,8 +28,8 @@ class SceneDisplay extends StatelessWidget {
     // 中文注释：统一两个操作按钮的公共样式，避免尺寸不一致（统一最小尺寸与内边距）
     final ButtonStyle commonButtonStyle = ElevatedButton.styleFrom(
       foregroundColor: AppTheme.textInverse,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      minimumSize: const Size(140, 50), // 统一最小宽高，避免大小不一致
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      minimumSize: const Size(120, 40), // 统一最小宽高，避免大小不一致
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );

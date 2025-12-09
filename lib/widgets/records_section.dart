@@ -26,7 +26,7 @@ class RecordsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 320, // Increased height for better spacing
+      height: 280, // Increased height to prevent overflow
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       color: AppTheme.surfaceLight,
       child: Column(
