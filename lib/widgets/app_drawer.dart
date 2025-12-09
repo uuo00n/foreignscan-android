@@ -35,8 +35,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   @override
   void initState() {
     super.initState();
-    _ipController.text = '172.20.10.3'; // 默认IP
-    _portController.text = '3000'; // 默认端口（与Go后端一致）
+    _initServerSettings();
     _loadWifiInfo();
   }
 
@@ -110,6 +109,13 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       final dio = ref.read(dioProvider);
       final newApiBaseUrl = 'http://$ip:$port/api';
       dio.options.baseUrl = newApiBaseUrl; // 动态切换到新地址
+
+      // 中文注释：持久化服务器设置，确保重启后仍使用最新地址
+      try {
+        final prefs = await ref.read(sharedPreferencesProvider.future);
+        await prefs.setString('server_ip', ip);
+        await prefs.setInt('server_port', port);
+      } catch (_) {}
 
       // 使样式图 Provider 失效并重新拉取，立刻刷新参考图
       ref.invalidate(styleImagesForSelectedSceneProvider);
@@ -431,6 +437,32 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         content: Text('同步失败：$e'),
         backgroundColor: Colors.red,
       ));
+    }
+  }
+
+  Future<void> _initServerSettings() async {
+    try {
+      final prefs = await ref.read(sharedPreferencesProvider.future);
+      final savedIp = prefs.getString('server_ip');
+      final savedPort = prefs.getInt('server_port');
+      if (savedIp != null && savedIp.isNotEmpty) {
+        _ipController.text = savedIp;
+      } else {
+        _ipController.text = '172.20.10.3';
+      }
+      _portController.text = (savedPort ?? 3000).toString();
+
+      // 中文注释：初始化 WiFi 服务与 Dio 的地址，使应用各处统一使用保存的服务器设置
+      final ip = _ipController.text.trim();
+      final port = int.tryParse(_portController.text.trim()) ?? 3000;
+      final wifiService = ref.read(wifiServiceProvider);
+      wifiService.setServerAddress(ip, port);
+      final dio = ref.read(dioProvider);
+      dio.options.baseUrl = 'http://$ip:$port/api';
+    } catch (_) {
+      // 读取失败则使用默认
+      _ipController.text = '172.20.10.3';
+      _portController.text = '3000';
     }
   }
 }

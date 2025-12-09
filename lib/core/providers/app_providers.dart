@@ -152,7 +152,17 @@ final isOnlineProvider = Provider<bool>((ref) {
 
 // WiFi通信服务提供者
 final wifiCommunicationServiceProvider = Provider<WiFiCommunicationService>((ref) {
-  return WiFiCommunicationService(ref.read(loggerProvider));
+  final svc = WiFiCommunicationService(ref.read(loggerProvider));
+  // 中文注释：将当前 Dio 的 baseUrl 解析为 host/port，初始化 WiFi 服务的服务器地址，避免默认值不一致
+  try {
+    final dio = ref.read(dioProvider);
+    final uri = Uri.parse(dio.options.baseUrl);
+    if (uri.host.isNotEmpty && (uri.scheme == 'http' || uri.scheme == 'https')) {
+      final port = uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
+      svc.setServerAddress(uri.host, port);
+    }
+  } catch (_) {}
+  return svc;
 });
 
 // 本地图片缓存服务提供者
