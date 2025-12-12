@@ -640,39 +640,56 @@ class RecordDetailPage extends ConsumerWidget {
               }
               return Column(
                 children: issues.map((issue) {
+                  // 判断合格/异常状态
+                  final className = issue.metadata?['class']?.toString().toLowerCase() ?? '';
+                  final isPass = (className == 'bolts' || className == 'bolt');
+                  final statusColor = isPass ? AppTheme.successColor : AppTheme.errorColor;
+                  final statusText = isPass ? '合格' : '异常';
+                  // 显示对象名称，若无则使用 description
+                  final objectName = issue.metadata?['class']?.toString() ?? issue.description;
+
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: issue.severity.color.withValues(alpha: 0.05),
+                      color: statusColor.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: issue.severity.color.withValues(alpha: 0.2)),
+                      border: Border.all(color: statusColor.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.error_outline, color: issue.severity.color, size: 20),
+                        Icon(
+                          isPass ? Icons.check_circle_outline : Icons.error_outline,
+                          color: statusColor,
+                          size: 20
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${issue.type.displayName} · ${issue.severity.displayName}',
+                                objectName,
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: issue.severity.color,
+                                  color: statusColor,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                issue.description,
-                                style: const TextStyle(fontSize: 13, height: 1.4),
+                                statusText,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: statusColor,
+                                ),
                               ),
                             ],
                           ),
                         ),
+                        /* 隐藏置信度百分比
                         if (issue.confidence != null)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -686,6 +703,7 @@ class RecordDetailPage extends ConsumerWidget {
                               style: TextStyle(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                           ),
+                        */
                       ],
                     ),
                   );
@@ -726,7 +744,25 @@ class RecordDetailPage extends ConsumerWidget {
             );
           }
           final count = (res.metadata?['objectCount'] as int?) ?? res.issues.length;
-          final verification = count > 0 ? '异常' : '已确认';
+          
+          // 修改核查逻辑：仅 Bolts 为合格，其他（如 hole）均为异常
+          // 逻辑：如果检测结果中所有 issue 的 class 都是 'Bolts'（不区分大小写），则判定为合格，否则为异常
+          bool isPass = true;
+          if (res.issues.isNotEmpty) {
+            for (final issue in res.issues) {
+              final className = issue.metadata?['class']?.toString().toLowerCase() ?? '';
+              // 如果包含非 Bolts 的对象（如 hole），则视为异常
+              if (className != 'bolts' && className != 'bolt') {
+                isPass = false;
+                break;
+              }
+            }
+          } else {
+            // 如果没有检测到任何对象，根据业务逻辑可能视为合格或需要确认，这里暂定合格
+            isPass = true;
+          }
+          final verification = isPass ? '合格' : '异常';
+          
           final avg = res.confidence != null ? '${(res.confidence! * 100).toStringAsFixed(0)}%' : '-';
           final iou = res.metadata?['iouThreshold']?.toString() ?? '-';
           final thr = res.metadata?['confidenceThreshold']?.toString() ?? '-';
@@ -771,8 +807,10 @@ class RecordDetailPage extends ConsumerWidget {
                     _buildInfoRow(Icons.model_training, '模型', res.detectionType ?? '-'),
                     const Divider(height: 16),
                     _buildInfoRow(Icons.category_outlined, '对象数量', '$count'),
+                    /* 隐藏平均置信度
                     const Divider(height: 16),
                     _buildInfoRow(Icons.speed, '平均置信度', avg),
+                    */
                     const Divider(height: 16),
                     _buildInfoRow(Icons.filter_alt_outlined, 'IOU/阈值', '$iou / $thr'),
                     const Divider(height: 16),
