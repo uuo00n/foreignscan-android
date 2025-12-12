@@ -664,6 +664,29 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
 
+    // 中文注释：若该场景图片已传输过，提示用户是否重复上传
+    if (selectedScene.isTransferred) {
+      final shouldRetransfer = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('重复传输提示'),
+          content: const Text('该照片已经上传过了，是否再次传输？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('再次传输'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldRetransfer != true) return;
+    }
+
     // 显示上传进度对话框
     showDialog(
       context: context,
