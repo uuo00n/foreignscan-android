@@ -24,6 +24,13 @@ class RecordDetailPage extends ConsumerWidget {
 
   const RecordDetailPage({super.key, required this.record});
 
+  // 中文注释：将根地址与相对路径拼接为完整URL
+  String _joinUrl(String base, String relative) {
+    final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final r = relative.startsWith('/') ? relative : '/$relative';
+    return '$b$r';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
@@ -38,22 +45,32 @@ class RecordDetailPage extends ConsumerWidget {
         ),
         title: const Text('拍摄记录详情'),
         actions: [
-          // 右上角全屏查看按钮
-          IconButton(
-            onPressed: () {
-              // 点击进入全屏查看页面
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => FullscreenImagePage(
-                    imageUrl: record.imagePath,
-                    heroTag: heroTagUser,
-                  ),
-                ),
+          // 右上角全屏查看按钮（优先查看检测结果图，若无则查看原图）
+          FutureBuilder<DetectionResult?>(
+            future: ref.read(detectionServiceProvider).getLatestDetectionByImage(record.id),
+            builder: (context, snap) {
+              final res = snap.data;
+              // 优先使用检测结果图路径，若为空则回退使用 record.imagePath
+              final targetUrl = (res != null && res.imagePath.isNotEmpty) ? res.imagePath : record.imagePath;
+              final targetHeroTag = (res != null && res.imagePath.isNotEmpty) ? 'verify-thumb-${res.id}' : heroTagUser;
+
+              return IconButton(
+                onPressed: () {
+                  // 点击进入全屏查看页面
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FullscreenImagePage(
+                        imageUrl: targetUrl,
+                        heroTag: targetHeroTag,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.fullscreen_rounded),
+                tooltip: '全屏查看',
               );
             },
-            icon: const Icon(Icons.fullscreen_rounded),
-            tooltip: '全屏查看',
           ),
         ],
       ),

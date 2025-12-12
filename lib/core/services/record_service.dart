@@ -122,12 +122,17 @@ class RecordService {
       return cachedCombined;
     } catch (e) {
       // 网络失败时，使用本地缓存兜底
-      final prefs = await _prefs;
-      final recordsJson = prefs.getString(_recordsKey);
-      if (recordsJson != null) {
-        return InspectionRecord.fromJsonList(recordsJson);
+      // 中文注释：捕获异常（如网络错误），回退到本地缓存显示，避免抛出异常导致页面错误
+      try {
+        final prefs = await _prefs;
+        final recordsJson = prefs.getString(_recordsKey);
+        if (recordsJson != null) {
+          return InspectionRecord.fromJsonList(recordsJson);
+        }
+        return []; // 本地无数据，返回空列表
+      } catch (_) {
+        return []; // 兜底返回空列表
       }
-      throw Exception('获取检测记录失败: $e');
     }
   }
 
@@ -156,7 +161,8 @@ class RecordService {
       // 为避免后续刷新时再次出现重复，直接保存本地缓存
       await saveRecords(updated);
     } catch (e) {
-      throw Exception('添加检测记录失败: $e');
+      // 中文注释：本地保存失败时不抛出异常，仅打印日志，避免阻塞 UI 流程
+      print('添加检测记录到本地失败: $e');
     }
   }
 

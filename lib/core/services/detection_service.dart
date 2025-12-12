@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:convert';
 import 'package:logger/logger.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,6 +36,7 @@ class DetectionService {
   DetectionService(this._logger, this._dio, this._prefs, this._cache, this._sceneService);
 
   static const String _detectionsKey = 'detection_results_cache';
+  static const String _detectionDetailsKey = 'detection_details_map_cache';
 
   Future<List<DetectionResult>> getDetectionResults() async {
     try {
@@ -284,10 +286,14 @@ class DetectionService {
       } else if (data is Map && data['data'] is List) {
         list = data['data'] as List<dynamic>;
       } else {
-        return null;
+        // 网络请求返回格式不符合预期，尝试读取本地缓存
+        return await _getCachedDetectionDetail(imageId);
       }
 
-      if (list.isEmpty) return null;
+      if (list.isEmpty) {
+        // 列表为空，也尝试读取本地缓存（可能之前有数据）
+        return await _getCachedDetectionDetail(imageId);
+      }
 
       // 选择最新一条（按 createdAt 排序，缺失时取第一条）
       list.sort((a, b) {
@@ -325,7 +331,7 @@ class DetectionService {
         );
       }).toList();
 
-      return DetectionResult(
+      final result = DetectionResult(
         id: id,
         sceneName: '',
         imagePath: imageUrl,
@@ -346,9 +352,72 @@ class DetectionService {
           'inferenceTimeMs': json['inferenceTimeMs'],
         },
       );
-    } catch (_) {
-      return null;
+
+      // 缓存最新的检测详情
+      await _cacheDetectionDetail(imageId, result);
+
+      // 中文注释：尝试缓存检测结果图片（若为网络图片）
+      if (imageUrl.isNotEmpty && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+        try {
+          final localPath = await _cache.ensureCachedImage(
+            url: imageUrl,
+            subdir: 'detections',
+            filename: 'detection_${id}_image.jpg',
+          );
+          if (localPath != null) {
+            // 更新 result 中的图片路径为本地路径并再次保存到详情缓存
+            final updatedResult = result.copyWith(imagePath: localPath);
+            await _cacheDetectionDetail(imageId, updatedResult);
+            return updatedResult;
+          }
+        } catch (_) {
+          // 图片缓存失败不影响主流程
+        }
+      }
+
+      return result;
+    } catch (e) {
+      // 网络请求失败，尝试读取本地缓存
+      _logger.w('获取检测详情网络请求失败，尝试读取本地缓存: $e');
+      return await _getCachedDetectionDetail(imageId);
     }
+  }
+
+  // 缓存检测详情
+  Future<void> _cacheDetectionDetail(String imageId, DetectionResult result) async {
+    try {
+      final prefs = await _prefs;
+      final String? jsonStr = prefs.getString(_detectionDetailsKey);
+      Map<String, dynamic> cacheMap = {};
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        try {
+          cacheMap = jsonDecode(jsonStr);
+        } catch (_) {}
+      }
+      
+      cacheMap[imageId] = result.toJson();
+      await prefs.setString(_detectionDetailsKey, jsonEncode(cacheMap));
+    } catch (e) {
+      _logger.w('缓存检测详情失败: $e');
+    }
+  }
+
+  // 读取本地缓存的检测详情
+  Future<DetectionResult?> _getCachedDetectionDetail(String imageId) async {
+    try {
+      final prefs = await _prefs;
+      final String? jsonStr = prefs.getString(_detectionDetailsKey);
+      if (jsonStr == null || jsonStr.isEmpty) return null;
+      
+      final Map<String, dynamic> cacheMap = jsonDecode(jsonStr);
+      final data = cacheMap[imageId];
+      if (data != null) {
+        return DetectionResult.fromJson(data);
+      }
+    } catch (e) {
+      _logger.w('读取检测详情缓存失败: $e');
+    }
+    return null;
   }
 
   // 中文注释：根据置信度映射严重程度
