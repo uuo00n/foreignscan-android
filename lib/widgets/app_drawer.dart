@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/services/wifi_communication_service.dart';
-import 'package:foreignscan/core/providers/home_providers.dart';
+import 'package:foreignscan/core/providers/home_providers.dart' hide loggerProvider;
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:logger/logger.dart';
 import 'package:foreignscan/core/providers/app_info_providers.dart';
@@ -442,11 +442,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       ref.invalidate(referenceImageUrlProvider);
     } catch (e) {
       // 失败提示（使用全局Messenger，不依赖局部上下文）
-      final sc = ScaffoldMessenger.of(AppRouter.navigatorKey.currentContext ?? context);
-      sc.showSnackBar(SnackBar(
-        content: Text('同步失败：$e'),
-        backgroundColor: AppTheme.errorColor,
-      ));
+      // final sc = ScaffoldMessenger.of(AppRouter.navigatorKey.currentContext ?? context);
+      // sc.showSnackBar(SnackBar(
+      //   content: Text('同步失败：$e'),
+      //   backgroundColor: AppTheme.errorColor,
+      // ));
+      ref.read(loggerProvider).e('同步失败 (UI提示已禁用): $e');
     }
   }
 

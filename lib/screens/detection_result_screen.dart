@@ -8,6 +8,8 @@ import 'package:foreignscan/widgets/verification_list.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
 import 'package:foreignscan/core/widgets/app_bar_actions.dart';
 import 'package:foreignscan/core/services/detection_service.dart';
+import 'package:foreignscan/core/services/scene_service.dart';
+import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/core/theme/app_theme.dart';
 
 class DetectionResultScreen extends ConsumerStatefulWidget {
@@ -29,6 +31,10 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
   DateTime? _singleDay; // 中文注释：单日模式下选择的日期
   bool _isSingleDayMode = false; // 中文注释：筛选模式（true=单日，false=范围）
   
+  // 场景筛选相关
+  String? _selectedSceneId;
+  List<SceneData> _allScenes = [];
+  
   // UI 常量
   static const double _imageWidth = 600.0;
   static const double _imageHeight = 450.0;
@@ -40,6 +46,21 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _fetchScenes();
+  }
+
+  Future<void> _fetchScenes() async {
+    try {
+      final service = ref.read(sceneServiceProvider);
+      final scenes = await service.getScenes();
+      if (mounted) {
+        setState(() {
+          _allScenes = scenes;
+        });
+      }
+    } catch (_) {
+      // 忽略场景加载错误
+    }
   }
 
   void _loadData() {
@@ -82,24 +103,44 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
   }
 
   List<DetectionResult> _getDisplayedList() {
+    List<DetectionResult> filtered = detectionList;
+
+    // 1. 场景筛选
+    if (_selectedSceneId != null) {
+      filtered = filtered.where((r) {
+        // 优先匹配 metadata 中的 sceneId
+        final sceneId = r.metadata?['sceneId']?.toString();
+        if (sceneId != null && sceneId.isNotEmpty) {
+          return sceneId == _selectedSceneId;
+        }
+        // 兜底：匹配场景名称（防止旧数据只有名称）
+        final selectedScene = _allScenes.firstWhere(
+          (s) => s.id == _selectedSceneId, 
+          orElse: () => SceneData(id: '', name: '')
+        );
+        return r.sceneName == selectedScene.name;
+      }).toList();
+    }
+
+    // 2. 日期筛选
     // 中文注释：优先使用单日筛选；否则使用范围筛选；都为空则返回原列表
     if (_isSingleDayMode && _singleDay != null) {
       final start = DateTime(_singleDay!.year, _singleDay!.month, _singleDay!.day);
       final end = DateTime(_singleDay!.year, _singleDay!.month, _singleDay!.day, 23, 59, 59, 999);
-      return detectionList.where((r) {
+      filtered = filtered.where((r) {
         final t = r.timestamp;
         return (t.isAtSameMomentAs(start) || t.isAfter(start)) && (t.isAtSameMomentAs(end) || t.isBefore(end));
       }).toList();
-    }
-    if (_dateRange != null) {
+    } else if (_dateRange != null) {
       final start = DateTime(_dateRange!.start.year, _dateRange!.start.month, _dateRange!.start.day);
       final end = DateTime(_dateRange!.end.year, _dateRange!.end.month, _dateRange!.end.day, 23, 59, 59, 999);
-      return detectionList.where((r) {
+      filtered = filtered.where((r) {
         final t = r.timestamp;
         return (t.isAtSameMomentAs(start) || t.isAfter(start)) && (t.isAtSameMomentAs(end) || t.isBefore(end));
       }).toList();
     }
-    return detectionList;
+    
+    return filtered;
   }
 
   Future<void> _showDateRangeDialog() async {
@@ -234,6 +275,63 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
                 Navigator.of(ctx).pop();
               },
               child: const Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSceneFilterDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('选择场景'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: _allScenes.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text('暂无场景数据', textAlign: TextAlign.center),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _allScenes.length + 1, // +1 for "All"
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return ListTile(
+                          title: const Text('全部场景'),
+                          leading: _selectedSceneId == null ? const Icon(Icons.check, color: AppTheme.primaryColor) : null,
+                          selected: _selectedSceneId == null,
+                          onTap: () {
+                            setState(() {
+                              _selectedSceneId = null;
+                            });
+                            Navigator.pop(ctx);
+                          },
+                        );
+                      }
+                      final scene = _allScenes[index - 1];
+                      final isSelected = _selectedSceneId == scene.id;
+                      return ListTile(
+                        title: Text(scene.name),
+                        leading: isSelected ? const Icon(Icons.check, color: AppTheme.primaryColor) : null,
+                        selected: isSelected,
+                        onTap: () {
+                          setState(() {
+                            _selectedSceneId = scene.id;
+                          });
+                          Navigator.pop(ctx);
+                        },
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
             ),
           ],
         );
@@ -484,31 +582,53 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _showDateRangeDialog,
-                      icon: const Icon(Icons.date_range, size: 18),
-                      label: const Text('筛选日期'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        side: BorderSide(color: AppTheme.primaryColor.withValues(alpha: 0.5)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _showSceneFilterDialog,
+                          icon: const Icon(Icons.filter_alt, size: 18),
+                          label: Text(_selectedSceneId != null 
+                            ? _allScenes.firstWhere((s) => s.id == _selectedSceneId, orElse: () => SceneData(id: '', name: '未知')).name
+                            : '场景'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            side: BorderSide(
+                              color: _selectedSceneId != null ? AppTheme.primaryColor : AppTheme.primaryColor.withValues(alpha: 0.5)
+                            ),
+                            backgroundColor: _selectedSceneId != null ? AppTheme.primaryColor.withValues(alpha: 0.05) : null,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: _showDateRangeDialog,
+                          icon: const Icon(Icons.date_range, size: 18),
+                          label: const Text('日期'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            side: BorderSide(color: AppTheme.primaryColor.withValues(alpha: 0.5)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (_isSingleDayMode && _singleDay != null)
+                          _buildDateChip(
+                            DateFormat('yyyy-MM-dd').format(_singleDay!),
+                            () => setState(() { _singleDay = null; }),
+                          )
+                        else if (_dateRange != null)
+                          _buildDateChip(
+                            '${DateFormat('yyyy-MM-dd').format(_dateRange!.start)} ~ ${DateFormat('yyyy-MM-dd').format(_dateRange!.end)}',
+                            () => setState(() => _dateRange = null),
+                          ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    if (_isSingleDayMode && _singleDay != null)
-                      _buildDateChip(
-                        DateFormat('yyyy-MM-dd').format(_singleDay!),
-                        () => setState(() { _singleDay = null; }),
-                      )
-                    else if (_dateRange != null)
-                      _buildDateChip(
-                        '${DateFormat('yyyy-MM-dd').format(_dateRange!.start)} ~ ${DateFormat('yyyy-MM-dd').format(_dateRange!.end)}',
-                        () => setState(() => _dateRange = null),
-                      ),
-                  ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () => _fetchDetectionList(forceNetwork: true),
                   icon: const Icon(Icons.sync, size: 18),
