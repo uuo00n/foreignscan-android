@@ -187,14 +187,15 @@ class WiFiCommunicationService {
         return null;
       }
 
-      // 生成年月日格式
+      // 生成年月日时分秒格式，确保文件名唯一，避免缓存问题
       final now = DateTime.now();
       final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+      final timeStr = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
       
-      // 生成文件名：年月日+场景编号
+      // 生成文件名：年月日_时分秒_场景编号
       final fileName = sceneId != null 
-          ? '${dateStr}_${sceneId}.jpg' 
-          : '${dateStr}_unknown.jpg';
+          ? '${dateStr}_${timeStr}_${sceneId}.jpg' 
+          : '${dateStr}_${timeStr}_unknown.jpg';
 
       // 构建表单：与后端字段保持一致
       final formData = FormData.fromMap({
