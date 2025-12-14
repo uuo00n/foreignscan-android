@@ -31,60 +31,63 @@ class RecordService {
   /// - 后端 /api/images 返回图片记录列表，字段包含 id、sceneId、path、createdAt 等
   /// - 为了显示场景名称，这里会先调用 SceneService.getScenes() 并用 sceneId 做映射
   /// - 图片 path 可能是相对路径（如 uploads/images/...），需要拼接为完整 URL 才能在前端展示
-  Future<List<InspectionRecord>> getRecords() async {
+  Future<List<InspectionRecord>> getRecords({bool forceOffline = false}) async {
     try {
-      // 1) 并发获取场景列表与图片记录
-      final scenesFuture = _sceneService.getScenes();
-      final imagesResponse = await _dio.get('/images');
-
-      final data = imagesResponse.data;
       List<InspectionRecord> networkRecords = [];
+      
+      if (!forceOffline) {
+        // 1) 并发获取场景列表与图片记录
+        final scenesFuture = _sceneService.getScenes(forceOffline: false);
+        final imagesResponse = await _dio.get('/images');
 
-      if (data is Map && data['images'] is List) {
-        final scenes = await scenesFuture;
-        // 构建 sceneId -> sceneName 映射表
-        final Map<String, String> sceneNameById = {
-          for (final s in scenes) s.id: s.name,
-        };
+        final data = imagesResponse.data;
 
-        final List items = data['images'];
-        networkRecords = items.map((raw) {
-          final m = raw as Map<String, dynamic>;
+        if (data is Map && data['images'] is List) {
+          final scenes = await scenesFuture;
+          // 构建 sceneId -> sceneName 映射表
+          final Map<String, String> sceneNameById = {
+            for (final s in scenes) s.id: s.name,
+          };
 
-          // 提前解析字段，避免多层嵌套，提高可读性
-          final String id = m['id']?.toString() ?? '';
-          final String sceneId = m['sceneId'] is Map && m['sceneId']['Hex'] != null
-              ? m['sceneId']['Hex'].toString()
-              : (m['sceneId']?.toString() ?? '');
-          final String path = m['path']?.toString() ?? '';
-          final String createdAtStr = m['createdAt']?.toString() ?? m['timestamp']?.toString() ?? '';
+          final List items = data['images'];
+          networkRecords = items.map((raw) {
+            final m = raw as Map<String, dynamic>;
 
-          // 构建完整图片URL（当 path 为相对路径或以 ./ 开头时，统一转为 http://host:port/uploads/...）
-          final String fullUrl = _buildFullImageUrl(path);
+            // 提前解析字段，避免多层嵌套，提高可读性
+            final String id = m['id']?.toString() ?? '';
+            final String sceneId = m['sceneId'] is Map && m['sceneId']['Hex'] != null
+                ? m['sceneId']['Hex'].toString()
+                : (m['sceneId']?.toString() ?? '');
+            final String path = m['path']?.toString() ?? '';
+            final String createdAtStr = m['createdAt']?.toString() ?? m['timestamp']?.toString() ?? '';
 
-          // 推断状态：若已检测则显示“已检测”，有缺陷则显示“存在缺陷”，否则“已上传”
-          final bool isDetected = m['isDetected'] == true;
-          final bool hasIssue = m['hasIssue'] == true;
-          final String status = hasIssue
-              ? '存在缺陷'
-              : (isDetected ? '已检测' : '已上传');
+            // 构建完整图片URL（当 path 为相对路径或以 ./ 开头时，统一转为 http://host:port/uploads/...）
+            final String fullUrl = _buildFullImageUrl(path);
 
-          // 时间解析：尽量使用后端的 createdAt/timestamp，失败则使用当前时间
-          DateTime ts;
-          try {
-            ts = DateTime.parse(createdAtStr);
-          } catch (_) {
-            ts = DateTime.now();
-          }
+            // 推断状态：若已检测则显示“已检测”，有缺陷则显示“存在缺陷”，否则“已上传”
+            final bool isDetected = m['isDetected'] == true;
+            final bool hasIssue = m['hasIssue'] == true;
+            final String status = hasIssue
+                ? '存在缺陷'
+                : (isDetected ? '已检测' : '已上传');
 
-          return InspectionRecord(
-            id: id,
-            sceneName: sceneNameById[sceneId] ?? '未知场景',
-            imagePath: fullUrl,
-            timestamp: ts,
-            status: status,
-          );
-        }).toList().cast<InspectionRecord>();
+            // 时间解析：尽量使用后端的 createdAt/timestamp，失败则使用当前时间
+            DateTime ts;
+            try {
+              ts = DateTime.parse(createdAtStr);
+            } catch (_) {
+              ts = DateTime.now();
+            }
+
+            return InspectionRecord(
+              id: id,
+              sceneName: sceneNameById[sceneId] ?? '未知场景',
+              imagePath: fullUrl,
+              timestamp: ts,
+              status: status,
+            );
+          }).toList().cast<InspectionRecord>();
+        }
       }
 
       // 2) 读取本地缓存记录作为兜底或补充（例如刚上传的本地记录）

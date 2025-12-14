@@ -19,30 +19,32 @@ class SceneService {
 
   SceneService(this._prefs, this._dio);
 
-  Future<List<SceneData>> getScenes() async {
+  Future<List<SceneData>> getScenes({bool forceOffline = false}) async {
     try {
-      // 先尝试从后端接口获取
-      // 说明：后端 Gin 路由基础路径为 /api，这里使用 Dio 已设置的 baseUrl（例如 http://localhost:3000/api）
-      final response = await _dio.get('/scenes');
-      final data = response.data;
+      if (!forceOffline) {
+        // 先尝试从后端接口获取
+        // 说明：后端 Gin 路由基础路径为 /api，这里使用 Dio 已设置的 baseUrl（例如 http://localhost:3000/api）
+        final response = await _dio.get('/scenes');
+        final data = response.data;
 
-      // 后端返回结构示例：{ success: true, scenes: [...] }
-      if (data is Map && data['scenes'] is List) {
-        final List scenesList = data['scenes'];
-        final scenes = scenesList.map((item) {
-          final m = item as Map<String, dynamic>;
-          return SceneData(
-            id: m['id']?.toString() ?? '', // ObjectID 转 hex 字符串
-            name: m['name']?.toString() ?? '',
-          );
-        }).toList().cast<SceneData>();
+        // 后端返回结构示例：{ success: true, scenes: [...] }
+        if (data is Map && data['scenes'] is List) {
+          final List scenesList = data['scenes'];
+          final scenes = scenesList.map((item) {
+            final m = item as Map<String, dynamic>;
+            return SceneData(
+              id: m['id']?.toString() ?? '', // ObjectID 转 hex 字符串
+              name: m['name']?.toString() ?? '',
+            );
+          }).toList().cast<SceneData>();
 
-        // 写入本地缓存作为兜底
-        await saveScenes(scenes);
-        return scenes;
+          // 写入本地缓存作为兜底
+          await saveScenes(scenes);
+          return scenes;
+        }
       }
 
-      // 如果结构不符合预期，尝试本地缓存兜底
+      // 如果强制离线或结构不符合预期，尝试本地缓存兜底
       final prefs = await _prefs;
       final scenesJson = prefs.getString(_scenesKey);
       if (scenesJson != null) {

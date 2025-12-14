@@ -435,7 +435,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     try {
       // 调用 HomeViewModel 的刷新逻辑
       final homeVM = ref.read(homeViewModelProvider.notifier);
-      await homeVM.refreshData();
+      // 中文注释：如果检测到离线，则强制走离线模式（直接读缓存，不请求网络），
+      // 避免在网络不通的情况下长时间等待超时（优化用户体验）。
+      await homeVM.refreshData(forceOffline: !isOnline);
 
       // 使样式图与参考图Provider失效，触发重新拉取与本地缓存
       ref.invalidate(styleImagesForSelectedSceneProvider);

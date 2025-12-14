@@ -165,12 +165,12 @@ class HomeViewModel extends StateNotifier<HomeState> {
 
   HomeViewModel(this._sceneService, this._recordService) : super(const HomeState());
 
-  Future<void> initializeData() async {
+  Future<void> initializeData({bool forceOffline = false}) async {
     try {
       state = state.copyWith(isLoading: true, errorMessage: null);
       
-      final scenes = await _sceneService.getScenes();
-      final records = await _recordService.getRecords();
+      final scenes = await _sceneService.getScenes(forceOffline: forceOffline);
+      final records = await _recordService.getRecords(forceOffline: forceOffline);
       
       state = state.copyWith(
         scenes: scenes,
@@ -260,7 +260,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
     state = state.copyWith(errorMessage: null);
   }
 
-  Future<void> refreshData() async {
-    await initializeData();
+  Future<void> refreshData({bool forceOffline = false}) async {
+    await initializeData(forceOffline: forceOffline);
   }
 }

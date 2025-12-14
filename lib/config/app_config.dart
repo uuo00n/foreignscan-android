@@ -30,7 +30,7 @@ class NetworkConfig {
   // 已根据你的后端地址修改为 172.20.10.3:3000
   static const String apiBaseUrl = 'http://172.20.10.3:3000/api';
 
-  static const Duration timeout = Duration(seconds: 30);
+  static const Duration timeout = Duration(seconds: 10);
   static const int maxRetries = 3;
   static const Duration retryDelay = Duration(seconds: 1);
 }
