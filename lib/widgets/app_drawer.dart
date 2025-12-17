@@ -33,6 +33,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   Map<String, dynamic>? _wifiInfo;
   int _statusVersion = 0; // 中文注释：状态版本号，每次状态变更递增，确保 AnimatedSwitcher 的子组件 Key 唯一，避免重复 Key
   bool _isAboutDialogShowing = false; // 中文注释：标记“关于”对话框是否正在显示，防止重复点击导致多次弹窗
+  bool _isWiredMode = false; // 中文注释：是否为有线模式（USB连接）
+  String _lastWirelessIp = ''; // 中文注释：保存切换到有线模式前的无线IP，以便切换回无线模式时恢复
 
   @override
   void initState() {
@@ -205,8 +207,53 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
+                    // 中文注释：连接模式选择（无线/有线）
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('无线模式')),
+                            selected: !_isWiredMode,
+                            onSelected: (selected) {
+                              if (selected && _isWiredMode) {
+                                setState(() {
+                                  _isWiredMode = false;
+                                  _ipController.text = _lastWirelessIp;
+                                  // 重置连接状态
+                                  _isConnected = false;
+                                  _hasTested = false;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('有线模式')),
+                            selected: _isWiredMode,
+                            onSelected: (selected) {
+                              if (selected && !_isWiredMode) {
+                                setState(() {
+                                  if (_ipController.text != '127.0.0.1') {
+                                    _lastWirelessIp = _ipController.text;
+                                  }
+                                  _isWiredMode = true;
+                                  _ipController.text = '127.0.0.1';
+                                  // 重置连接状态
+                                  _isConnected = false;
+                                  _hasTested = false;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: _ipController,
+                      enabled: !_isWiredMode, // 中文注释：有线模式下锁定IP输入
                       decoration: const InputDecoration(
                         labelText: '服务器IP',
                         hintText: '例如: 192.168.1.100',
@@ -365,6 +412,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       if (savedIp != null && savedIp.isNotEmpty && savedPort != null) {
         _ipController.text = savedIp;
         _portController.text = savedPort.toString();
+        
+        // 中文注释：检测是否为有线模式IP (127.0.0.1)
+        if (savedIp == '127.0.0.1') {
+          _isWiredMode = true;
+        } else {
+          _isWiredMode = false;
+          _lastWirelessIp = savedIp;
+        }
 
         // 中文注释：仅当存在已保存的服务器配置时，初始化 WiFi 服务与 Dio 地址
         final ip = _ipController.text.trim();
