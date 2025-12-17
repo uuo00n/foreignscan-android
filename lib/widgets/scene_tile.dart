@@ -63,6 +63,21 @@ class SceneTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis, // 名称过长时省略
               maxLines: 1,
             ),
+            // 新增：小圆点指示状态
+            if (scene.latestStatus != null && scene.latestStatus != 'none')
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: (scene.latestStatus == '已检测')
+                        ? ((scene.hasIssue == true) ? AppTheme.errorColor : AppTheme.successColor)
+                        : AppTheme.warningColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
           ],
         ),
       ),

@@ -123,6 +123,35 @@ class SceneDisplay extends StatelessWidget {
                   ),
                 ),
               ],
+              // 新增：检测状态展示
+              if (scene.latestStatus != null && scene.latestStatus != 'none') ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(scene).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _getStatusIcon(scene),
+                        size: 14,
+                        color: _getStatusColor(scene),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _getStatusText(scene),
+                        style: TextStyle(
+                          color: _getStatusColor(scene),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
           SizedBox(height: 24),
@@ -167,6 +196,27 @@ class SceneDisplay extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Color _getStatusColor(SceneData scene) {
+    if (scene.latestStatus == '已检测') {
+      return (scene.hasIssue == true) ? AppTheme.errorColor : AppTheme.successColor;
+    }
+    return AppTheme.warningColor; // 待检测
+  }
+
+  IconData _getStatusIcon(SceneData scene) {
+    if (scene.latestStatus == '已检测') {
+      return (scene.hasIssue == true) ? Icons.error_outline : Icons.check_circle_outline;
+    }
+    return Icons.hourglass_empty;
+  }
+
+  String _getStatusText(SceneData scene) {
+    if (scene.latestStatus == '已检测') {
+      return (scene.hasIssue == true) ? '检测未通过' : '检测通过';
+    }
+    return '待检测';
   }
 
   /// 模板参考图区域
