@@ -172,55 +172,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
       final scenes = await _sceneService.getScenes(forceOffline: forceOffline);
       final records = await _recordService.getRecords(forceOffline: forceOffline);
       
-      // 中文注释：
-      // 根据“每日巡检”的业务逻辑，场景列表上的状态点（绿/红/黄）仅应反映“今日”的检测情况。
-      // 若今日未检测，则不显示状态点（即视为待巡检），即使历史上有记录。
-      // 这里通过遍历 records 找到每个场景的最新记录，并根据其时间是否为今天来更新 SceneData 的状态。
-      
-      final now = DateTime.now();
-      final todayStart = DateTime(now.year, now.month, now.day);
-      final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
-      
-      final updatedScenes = scenes.map((scene) {
-        // 1. 筛选出该场景的所有记录
-        final sceneRecords = records.where((r) => r.sceneName == scene.name).toList();
-        
-        if (sceneRecords.isEmpty) {
-          // 无记录 -> 重置状态
-          return scene.copyWith(latestStatus: 'none', hasIssue: false);
-        }
-        
-        // 2. 按时间倒序排列，取最新一条
-        sceneRecords.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-        final latest = sceneRecords.first;
-        
-        // 3. 判断是否为今日记录
-        final isToday = latest.timestamp.isAfter(todayStart) && latest.timestamp.isBefore(todayEnd);
-        
-        if (isToday) {
-          // 是今日记录 -> 映射状态
-          final rStatus = latest.status;
-          String newStatus;
-          bool newHasIssue;
-          
-          if (rStatus == '存在缺陷' || rStatus == '异常') {
-            newStatus = '已检测';
-            newHasIssue = true;
-          } else if (rStatus == '已检测' || rStatus == '合格' || rStatus == '已确认') {
-            newStatus = '已检测';
-            newHasIssue = false;
-          } else {
-            // 已上传、待检测等 -> 显示为待检测（黄点）
-            newStatus = '待检测';
-            newHasIssue = false;
-          }
-          
-          return scene.copyWith(latestStatus: newStatus, hasIssue: newHasIssue);
-        } else {
-          // 非今日记录 -> 不显示状态点
-          return scene.copyWith(latestStatus: 'none', hasIssue: false);
-        }
-      }).toList();
+      final updatedScenes = _calculateScenesStatus(scenes, records);
 
       state = state.copyWith(
         scenes: updatedScenes,
@@ -233,6 +185,54 @@ class HomeViewModel extends StateNotifier<HomeState> {
         errorMessage: '数据加载失败: $e',
       );
     }
+  }
+
+  // 提取出来的状态计算逻辑
+  List<SceneData> _calculateScenesStatus(List<SceneData> scenes, List<InspectionRecord> records) {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+    
+    return scenes.map((scene) {
+      // 1. 筛选出该场景的所有记录
+      final sceneRecords = records.where((r) => r.sceneName == scene.name).toList();
+      
+      if (sceneRecords.isEmpty) {
+        // 无记录 -> 重置状态
+        return scene.copyWith(latestStatus: 'none', hasIssue: false);
+      }
+      
+      // 2. 按时间倒序排列，取最新一条
+      sceneRecords.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      final latest = sceneRecords.first;
+      
+      // 3. 判断是否为今日记录
+      final isToday = latest.timestamp.isAfter(todayStart) && latest.timestamp.isBefore(todayEnd);
+      
+      if (isToday) {
+        // 是今日记录 -> 映射状态
+        final rStatus = latest.status;
+        String newStatus;
+        bool newHasIssue;
+        
+        if (rStatus == '存在缺陷' || rStatus == '异常') {
+          newStatus = '已检测';
+          newHasIssue = true;
+        } else if (rStatus == '已检测' || rStatus == '合格' || rStatus == '已确认') {
+          newStatus = '已检测';
+          newHasIssue = false;
+        } else {
+          // 已上传、待检测等 -> 显示为待检测（黄点）
+          newStatus = '待检测';
+          newHasIssue = false;
+        }
+        
+        return scene.copyWith(latestStatus: newStatus, hasIssue: newHasIssue);
+      } else {
+        // 非今日记录 -> 不显示状态点
+        return scene.copyWith(latestStatus: 'none', hasIssue: false);
+      }
+    }).toList();
   }
 
   void selectScene(int index) {
@@ -260,7 +260,13 @@ class HomeViewModel extends StateNotifier<HomeState> {
       final updatedRecords = List<InspectionRecord>.from(state.inspectionRecords);
       updatedRecords.insert(0, record);
       
-      state = state.copyWith(inspectionRecords: updatedRecords);
+      // 添加记录后，重新计算场景状态，确保UI上的黄点/绿点/红点即时更新
+      final updatedScenes = _calculateScenesStatus(state.scenes, updatedRecords);
+      
+      state = state.copyWith(
+        inspectionRecords: updatedRecords,
+        scenes: updatedScenes,
+      );
     } catch (e) {
       state = state.copyWith(errorMessage: '添加记录失败: $e');
     }
