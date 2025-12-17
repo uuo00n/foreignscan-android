@@ -11,7 +11,7 @@ import 'package:foreignscan/core/theme/app_theme.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   final Function() onUploadPressed;
-  final Function()? onSyncPressed;
+  final Function(bool isWiredMode)? onSyncPressed;
   
   const AppDrawer({
     Key? key,
@@ -358,7 +358,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             onTap: () {
               // 关闭抽屉并触发同步回调
               Navigator.pop(context);
-              widget.onSyncPressed?.call();
+              widget.onSyncPressed?.call(_isWiredMode);
             },
           ),
           const Divider(),

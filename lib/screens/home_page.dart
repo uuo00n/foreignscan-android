@@ -910,7 +910,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  Future<void> _handleSync() async {
+  Future<void> _handleSync(bool isWiredMode) async {
     // 先检测当前是否可与服务器通信（在线/离线）
     final wifiService = ref.read(wifiServiceProvider);
     bool isOnline = false;
@@ -934,7 +934,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             const CircularProgressIndicator(),
             const SizedBox(height: 12),
             Text(isOnline
-                ? '正在从服务器拉取最新场景与检测记录...'
+                ? '正在通过${isWiredMode ? "有线" : "无线"}连接从服务器拉取最新场景与检测记录...'
                 : '当前离线，仅刷新本地缓存数据'),
           ],
         ),
