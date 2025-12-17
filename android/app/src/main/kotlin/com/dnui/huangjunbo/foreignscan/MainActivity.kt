@@ -1,4 +1,4 @@
-package com.neusoft.uu.foreignscan
+package com.dnui.huangjunbo.foreignscan
 
 import io.flutter.embedding.android.FlutterActivity
 
