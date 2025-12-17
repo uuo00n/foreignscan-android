@@ -239,6 +239,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                     _lastWirelessIp = _ipController.text;
                                   }
                                   _isWiredMode = true;
+                                  // 中文注释：切换到有线模式时默认填入 127.0.0.1，但允许用户后续修改
                                   _ipController.text = '127.0.0.1';
                                   // 重置连接状态
                                   _isConnected = false;
@@ -253,7 +254,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: _ipController,
-                      enabled: !_isWiredMode, // 中文注释：有线模式下锁定IP输入
+                      // 中文注释：有线模式下不再锁定IP输入，允许用户修改
                       decoration: const InputDecoration(
                         labelText: '服务器IP',
                         hintText: '例如: 192.168.1.100',
