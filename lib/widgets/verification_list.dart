@@ -196,6 +196,7 @@ class VerificationList extends StatelessWidget {
   Color _getStatusColor(String status) {
     switch (status) {
       case '已确认':
+      case '合格':
         return AppTheme.successColor.withValues(alpha: 0.1);
       case '异常':
         return AppTheme.errorColor.withValues(alpha: 0.1);
@@ -207,6 +208,7 @@ class VerificationList extends StatelessWidget {
   Color _getStatusTextColor(String status) {
     switch (status) {
       case '已确认':
+      case '合格':
         return AppTheme.successColor;
       case '异常':
         return AppTheme.errorColor;

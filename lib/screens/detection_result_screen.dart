@@ -520,7 +520,7 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '检测到 ${(currentResult?.issues.length ?? imageIssues.length)} 个问题',
+                '检测到 ${(currentResult?.issues.length ?? imageIssues.length)} 个对象',
                 style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
               ),
               ElevatedButton.icon(
@@ -547,8 +547,32 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
   List<VerificationRecord> _buildVerificationRecords() {
     final selected = currentResult;
     if (selected == null) return [];
-    final count = (selected.metadata?['objectCount'] as int?) ?? selected.issues.length;
-    final result = count > 0 ? '异常' : '已确认';
+    
+    // 判断是否合格：仅 Bolts 为合格，其他（如 hole）均为异常
+    bool isQualified = true;
+    if (selected.issues.isNotEmpty) {
+      for (final issue in selected.issues) {
+        final className = issue.metadata?['class']?.toString().toLowerCase() ?? '';
+        if (className != 'bolts' && className != 'bolt') {
+          isQualified = false;
+          break;
+        }
+      }
+    } else {
+      // 如果 issues 为空但 metadata 显示有对象，且无法判断类型，暂视为异常（或者如果没有 issues 也没有对象，则是合格）
+      final count = (selected.metadata?['objectCount'] as int?) ?? 0;
+      if (count > 0) {
+        // 有对象但没有 issue 详情，无法判断类型，保守起见可能需要视为异常，或者假设如果只有 count 没有 issues 可能是简略信息
+        // 但通常 DetectionResult 应该包含 issues。
+        // 如果这里 count > 0 且 issues 为空，说明可能只有统计数据。
+        // 但根据用户反馈，他们看到的是 "合格" 被标记为 "异常"，说明他们知道它是合格的（可能是 Bolts）。
+        // 如果 issues 为空，我们无法判断。但通常 issues 会有。
+        // 这里暂时假设如果 issues 为空且 count > 0，保持原逻辑（异常），除非 issues 不为空才走判断逻辑。
+        isQualified = false; 
+      }
+    }
+
+    final result = isQualified ? '合格' : '异常';
     return [
       VerificationRecord(
         id: selected.id,
@@ -719,7 +743,7 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
                                         Icon(Icons.bug_report_outlined, size: 12, color: AppTheme.textSecondary),
                                         const SizedBox(width: 4),
                                         Text(
-                                          '$count 个问题',
+                                          '$count 个对象',
                                           style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                                         ),
                                         const SizedBox(width: 8),
