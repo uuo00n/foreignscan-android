@@ -407,24 +407,45 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       }
 
       // 执行同步逻辑（在线时尝试请求服务器，离线时走本地兜底）
-      await _performSync(isOnline);
+      bool success = true;
+      String? errorMessage;
+      try {
+        await _performSync(isOnline);
+      } catch (e) {
+        success = false;
+        errorMessage = e.toString();
+        // 去掉 "Exception: " 前缀让提示更友好
+        if (errorMessage!.startsWith('Exception: ')) {
+          errorMessage = errorMessage!.substring(11);
+        }
+      }
 
       // 关闭进度对话框（使用全局Navigator，不依赖局部上下文）
-      AppRouter.navigatorKey.currentState?.pop();
-
-      // 根据在线/离线状态给出提示
-      final messenger = ScaffoldMessenger.of(AppRouter.navigatorKey.currentContext ?? context);
-      messenger.showSnackBar(SnackBar(
-        content: Text(isOnline
-            ? '同步完成：已与服务器通信并更新数据'
-            : '离线刷新完成：已更新本地缓存数据（未与服务器通信）'),
-        backgroundColor: isOnline ? AppTheme.successColor : AppTheme.warningColor,
-      ));
+      if (AppRouter.navigatorKey.currentState?.canPop() ?? false) {
+        AppRouter.navigatorKey.currentState?.pop();
+      }
 
       if (mounted) {
         setState(() {
           _isSyncing = false;
         });
+      }
+
+      // 根据在线/离线状态给出提示
+      final messenger = ScaffoldMessenger.of(AppRouter.navigatorKey.currentContext ?? context);
+      
+      if (success) {
+        messenger.showSnackBar(SnackBar(
+          content: Text(isOnline
+              ? '同步完成：已与服务器通信并更新数据'
+              : '离线刷新完成：已更新本地缓存数据'),
+          backgroundColor: isOnline ? AppTheme.successColor : AppTheme.warningColor,
+        ));
+      } else {
+        messenger.showSnackBar(SnackBar(
+          content: Text('同步失败：${errorMessage ?? '未知错误'}'),
+          backgroundColor: AppTheme.errorColor,
+        ));
       }
     });
   }
@@ -437,19 +458,21 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       final homeVM = ref.read(homeViewModelProvider.notifier);
       // 中文注释：如果检测到离线，则强制走离线模式（直接读缓存，不请求网络），
       // 避免在网络不通的情况下长时间等待超时（优化用户体验）。
-      await homeVM.refreshData(forceOffline: !isOnline);
+      // 增加超时控制：最多等待 15 秒，防止在弱网或服务器卡顿时无限等待
+      await homeVM.refreshData(forceOffline: !isOnline).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('请求超时，请检查网络或服务器状态');
+        },
+      );
 
       // 使样式图与参考图Provider失效，触发重新拉取与本地缓存
       ref.invalidate(styleImagesForSelectedSceneProvider);
       ref.invalidate(referenceImageUrlProvider);
     } catch (e) {
-      // 失败提示（使用全局Messenger，不依赖局部上下文）
-      // final sc = ScaffoldMessenger.of(AppRouter.navigatorKey.currentContext ?? context);
-      // sc.showSnackBar(SnackBar(
-      //   content: Text('同步失败：$e'),
-      //   backgroundColor: AppTheme.errorColor,
-      // ));
-      ref.read(loggerProvider).e('同步失败 (UI提示已禁用): $e');
+      ref.read(loggerProvider).e('同步失败: $e');
+      // 将异常抛出给上层处理，以便 UI 显示错误提示
+      rethrow;
     }
   }
 
