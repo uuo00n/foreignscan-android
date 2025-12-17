@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:camera/camera.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 import 'package:foreignscan/config/app_config.dart';
@@ -77,63 +76,6 @@ final dioProvider = Provider<Dio>((ref) {
   return dio;
 });
 
-// 相机控制器提供者
-final cameraControllerProvider = StateNotifierProvider<CameraControllerNotifier, AsyncValue<CameraController?>>((ref) {
-  return CameraControllerNotifier(ref);
-});
-
-class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController?>> {
-  final Ref _ref;
-  
-  CameraControllerNotifier(this._ref) : super(const AsyncValue.loading());
-  
-  Future<void> initializeCamera() async {
-    try {
-      state = const AsyncValue.loading();
-      
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        state = const AsyncValue.error('没有可用的相机', StackTrace.empty);
-        return;
-      }
-      
-  final controller = CameraController(
-    cameras.first,
-    ResolutionPreset.high,
-    enableAudio: false,
-  );
-  
-  await controller.initialize();
-  // 中文注释：
-  // 初始化后显式关闭闪光灯，避免设备/插件默认自动闪光导致拍照时亮灯。
-  try {
-    await controller.setFlashMode(FlashMode.off);
-  } catch (e) {
-    _ref.read(loggerProvider).w('设置闪光灯为关闭失败: $e');
-  }
-  state = AsyncValue.data(controller);
-      
-      _ref.read(loggerProvider).i('相机初始化成功');
-    } catch (e, stackTrace) {
-      state = AsyncValue.error(e, stackTrace);
-      _ref.read(loggerProvider).e('相机初始化失败', error: e, stackTrace: stackTrace);
-    }
-  }
-  
-  Future<void> disposeCamera() async {
-    final controller = state.value;
-    if (controller != null) {
-      await controller.dispose();
-      state = const AsyncValue.data(null);
-    }
-  }
-  
-  @override
-  void dispose() {
-    disposeCamera();
-    super.dispose();
-  }
-}
 
 // 网络连接状态提供者
 final connectivityProvider = StreamProvider<bool>((ref) {

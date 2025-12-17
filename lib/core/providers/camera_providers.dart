@@ -9,7 +9,7 @@ final cameraServiceProvider = Provider<CameraService>((ref) {
 });
 
 // 相机控制器提供者
-final cameraControllerProvider = StateNotifierProvider<CameraControllerNotifier, AsyncValue<CameraController?>>((ref) {
+final cameraControllerProvider = StateNotifierProvider.autoDispose<CameraControllerNotifier, AsyncValue<CameraController?>>((ref) {
   return CameraControllerNotifier(ref);
 });
 
