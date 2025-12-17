@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/theme/app_theme.dart';
-import 'package:foreignscan/core/providers/home_providers.dart';
+import 'package:foreignscan/core/providers/home_providers.dart' hide loggerProvider;
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
 import 'package:foreignscan/core/widgets/loading_widget.dart';
@@ -85,6 +85,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         appBar: _buildAppBar(context, ref),
         drawer: AppDrawer(
           onUploadPressed: () => _uploadLatestImage(context, ref),
+          onSyncPressed: _handleSync,
         ),
         body: homeState.isLoading 
             ? const LoadingWidget(message: '正在加载数据...')
@@ -907,5 +908,74 @@ class _HomePageState extends ConsumerState<HomePage> {
         );
       },
     );
+  }
+
+  Future<void> _handleSync() async {
+    // 先检测当前是否可与服务器通信（在线/离线）
+    final wifiService = ref.read(wifiServiceProvider);
+    bool isOnline = false;
+    try {
+      isOnline = await wifiService.testConnection();
+    } catch (_) {
+      isOnline = false;
+    }
+
+    if (!mounted) return;
+
+    // 弹出进度对话框
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: Text(isOnline ? '正在与服务器同步' : '离线刷新'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text(isOnline
+                ? '正在从服务器拉取最新场景与检测记录...'
+                : '当前离线，仅刷新本地缓存数据'),
+          ],
+        ),
+      ),
+    );
+
+    bool success = true;
+    String? errorMessage;
+    try {
+      final homeVM = ref.read(homeViewModelProvider.notifier);
+      await homeVM.refreshData(forceOffline: !isOnline).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('请求超时，请检查网络或服务器状态');
+        },
+      );
+      
+      ref.invalidate(styleImagesForSelectedSceneProvider);
+      ref.invalidate(referenceImageUrlProvider);
+    } catch (e) {
+      success = false;
+      errorMessage = e.toString();
+      if (errorMessage!.startsWith('Exception: ')) {
+        errorMessage = errorMessage!.substring(11);
+      }
+      ref.read(loggerProvider).e('同步失败: $e');
+    }
+
+    if (!mounted) return;
+
+    // 关闭进度对话框
+    Navigator.of(context).pop();
+
+    // 显示 SnackBar
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(success 
+          ? (isOnline ? '同步完成：已与服务器通信并更新数据' : '离线刷新完成：已更新本地缓存数据')
+          : '同步失败：${errorMessage ?? '未知错误'}'),
+      backgroundColor: success 
+          ? (isOnline ? AppTheme.successColor : AppTheme.warningColor)
+          : AppTheme.errorColor,
+    ));
   }
 }

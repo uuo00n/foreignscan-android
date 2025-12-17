@@ -11,10 +11,12 @@ import 'package:foreignscan/core/theme/app_theme.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   final Function() onUploadPressed;
+  final Function()? onSyncPressed;
   
   const AppDrawer({
     Key? key,
     required this.onUploadPressed,
+    this.onSyncPressed,
   }) : super(key: key);
 
   @override
@@ -31,7 +33,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   Map<String, dynamic>? _wifiInfo;
   int _statusVersion = 0; // 中文注释：状态版本号，每次状态变更递增，确保 AnimatedSwitcher 的子组件 Key 唯一，避免重复 Key
   bool _isAboutDialogShowing = false; // 中文注释：标记“关于”对话框是否正在显示，防止重复点击导致多次弹窗
-  bool _isSyncing = false; // 中文注释：标记是否正在与服务器同步，避免并发触发
 
   @override
   void initState() {
@@ -306,14 +307,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           ListTile(
             leading: const Icon(Icons.sync, color: AppTheme.primaryColor),
             title: const Text('同步数据'),
-            trailing: _isSyncing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : null,
-            onTap: _isSyncing ? null : _syncData,
+            onTap: () {
+              // 关闭抽屉并触发同步回调
+              Navigator.pop(context);
+              widget.onSyncPressed?.call();
+            },
           ),
           const Divider(),
           ListTile(
@@ -357,123 +355,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         ],
       ),
     );
-  }
-
-  /// 手动同步数据（场景与检测记录），并刷新样式图/参考图Provider
-  /// 中文注释：
-  /// - 关闭抽屉后使用全局Navigator上下文弹出“正在同步”的进度对话框；
-  /// - 调用 HomeViewModel.refreshData() 从服务器拉取最新场景与记录；
-  /// - 使样式图与参考图 Provider 失效以重新拉取，确保首页左侧模板参考图即时更新；
-  /// - 成功/失败后给予SnackBar提示。
-  Future<void> _syncData() async {
-    if (_isSyncing) return; // 防并发
-    setState(() {
-      _isSyncing = true;
-    });
-
-    // 先关闭抽屉，避免在抽屉上下文中弹窗导致上下文卸载问题
-    Navigator.pop(context);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // 先检测当前是否可与服务器通信（在线/离线），不使用UI上下文，避免跨异步间隙的上下文使用
-      final wifiService = ref.read(wifiServiceProvider);
-      bool isOnline = false;
-      try {
-        isOnline = await wifiService.testConnection();
-      } catch (_) {
-        isOnline = false;
-      }
-
-      // 使用全局 Navigator 弹出进度对话框，避免跨异步使用局部 BuildContext
-      final navCtx = AppRouter.navigatorKey.currentContext;
-      if (navCtx != null) {
-        showDialog(
-          context: navCtx,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            title: Text(isOnline ? '正在与服务器同步' : '离线刷新'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 12),
-                Text(isOnline
-                    ? '正在从服务器拉取最新场景与检测记录...'
-                    : '当前离线，仅刷新本地缓存数据'),
-              ],
-            ),
-          ),
-        );
-      }
-
-      // 执行同步逻辑（在线时尝试请求服务器，离线时走本地兜底）
-      bool success = true;
-      String? errorMessage;
-      try {
-        await _performSync(isOnline);
-      } catch (e) {
-        success = false;
-        errorMessage = e.toString();
-        // 去掉 "Exception: " 前缀让提示更友好
-        if (errorMessage!.startsWith('Exception: ')) {
-          errorMessage = errorMessage!.substring(11);
-        }
-      }
-
-      // 关闭进度对话框（使用全局Navigator，不依赖局部上下文）
-      if (AppRouter.navigatorKey.currentState?.canPop() ?? false) {
-        AppRouter.navigatorKey.currentState?.pop();
-      }
-
-      if (mounted) {
-        setState(() {
-          _isSyncing = false;
-        });
-      }
-
-      // 根据在线/离线状态给出提示
-      final messenger = ScaffoldMessenger.of(AppRouter.navigatorKey.currentContext ?? context);
-      
-      if (success) {
-        messenger.showSnackBar(SnackBar(
-          content: Text(isOnline
-              ? '同步完成：已与服务器通信并更新数据'
-              : '离线刷新完成：已更新本地缓存数据'),
-          backgroundColor: isOnline ? AppTheme.successColor : AppTheme.warningColor,
-        ));
-      } else {
-        messenger.showSnackBar(SnackBar(
-          content: Text('同步失败：${errorMessage ?? '未知错误'}'),
-          backgroundColor: AppTheme.errorColor,
-        ));
-      }
-    });
-  }
-
-  /// 实际执行同步的内部方法
-  /// 参数 isOnline：指示是否在线；在线时服务会优先访问服务器，离线时走本地缓存
-  Future<void> _performSync(bool isOnline) async {
-    try {
-      // 调用 HomeViewModel 的刷新逻辑
-      final homeVM = ref.read(homeViewModelProvider.notifier);
-      // 中文注释：如果检测到离线，则强制走离线模式（直接读缓存，不请求网络），
-      // 避免在网络不通的情况下长时间等待超时（优化用户体验）。
-      // 增加超时控制：最多等待 15 秒，防止在弱网或服务器卡顿时无限等待
-      await homeVM.refreshData(forceOffline: !isOnline).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          throw Exception('请求超时，请检查网络或服务器状态');
-        },
-      );
-
-      // 使样式图与参考图Provider失效，触发重新拉取与本地缓存
-      ref.invalidate(styleImagesForSelectedSceneProvider);
-      ref.invalidate(referenceImageUrlProvider);
-    } catch (e) {
-      ref.read(loggerProvider).e('同步失败: $e');
-      // 将异常抛出给上层处理，以便 UI 显示错误提示
-      rethrow;
-    }
   }
 
   Future<void> _initServerSettings() async {
