@@ -165,6 +165,11 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   // 中文注释：首次安装的服务器设置弹窗
   Future<void> _showServerSetupDialog() async {
+    // 临时状态变量，用于在弹窗内部管理模式切换
+    bool isWiredMode = false;
+    String lastWirelessIp = '';
+    String lastWiredIp = '';
+
     await showDialog(
       context: context,
       barrierDismissible: false, // 首次安装强制配置，禁止点击遮罩关闭
@@ -207,6 +212,56 @@ class _HomePageState extends ConsumerState<HomePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // 模式选择
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('无线模式')),
+                            selected: !isWiredMode,
+                            onSelected: (selected) {
+                              if (selected && isWiredMode) {
+                                setState(() {
+                                  // 切换前保存有线IP
+                                  lastWiredIp = _serverIpController.text;
+                                  
+                                  isWiredMode = false;
+                                  // 恢复无线IP
+                                  _serverIpController.text = lastWirelessIp;
+                                  // 重置状态
+                                  _isTestingServer = false;
+                                  _testMsg = null;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('有线模式')),
+                            selected: isWiredMode,
+                            onSelected: (selected) {
+                              if (selected && !isWiredMode) {
+                                setState(() {
+                                  // 切换前保存无线IP
+                                  lastWirelessIp = _serverIpController.text;
+                                  
+                                  isWiredMode = true;
+                                  // 恢复有线IP
+                                  _serverIpController.text = lastWiredIp;
+                                  
+                                  // 重置状态
+                                  _isTestingServer = false;
+                                  _testMsg = null;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: _serverIpController,
                       decoration: InputDecoration(
@@ -348,6 +403,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                                     final prefs = await ref.read(sharedPreferencesProvider.future);
                                     await prefs.setString('server_ip', ip);
                                     await prefs.setInt('server_port', port);
+                                    
+                                    // 保存当前模式
+                                    await prefs.setBool('is_wired_mode', isWiredMode);
+                                    
+                                    // 分别保存对应模式的IP
+                                    if (isWiredMode) {
+                                      await prefs.setString('wired_server_ip', ip);
+                                    } else {
+                                      await prefs.setString('wireless_server_ip', ip);
+                                    }
                                   } catch (_) {}
                                   ref.invalidate(styleImagesForSelectedSceneProvider);
                                   // 初始化首页数据

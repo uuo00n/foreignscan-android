@@ -35,6 +35,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   bool _isAboutDialogShowing = false; // 中文注释：标记“关于”对话框是否正在显示，防止重复点击导致多次弹窗
   bool _isWiredMode = false; // 中文注释：是否为有线模式（USB连接）
   String _lastWirelessIp = ''; // 中文注释：保存切换到有线模式前的无线IP，以便切换回无线模式时恢复
+  String _lastWiredIp = ''; // 中文注释：保存切换到无线模式前的有线IP，以便切换回有线模式时恢复
 
   @override
   void initState() {
@@ -117,8 +118,19 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       // 中文注释：持久化服务器设置，确保重启后仍使用最新地址
       try {
         final prefs = await ref.read(sharedPreferencesProvider.future);
+        // 保存当前连接成功的IP到通用字段，兼容旧逻辑
         await prefs.setString('server_ip', ip);
         await prefs.setInt('server_port', port);
+        
+        // 保存当前模式
+        await prefs.setBool('is_wired_mode', _isWiredMode);
+        
+        // 分别保存对应模式的IP，实现独立记忆
+        if (_isWiredMode) {
+          await prefs.setString('wired_server_ip', ip);
+        } else {
+          await prefs.setString('wireless_server_ip', ip);
+        }
       } catch (_) {}
 
       // 使样式图 Provider 失效并重新拉取，立刻刷新参考图
@@ -217,6 +229,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             onSelected: (selected) {
                               if (selected && _isWiredMode) {
                                 setState(() {
+                                  // 切换到无线模式前，保存当前的有线IP
+                                  _lastWiredIp = _ipController.text;
+                                  
                                   _isWiredMode = false;
                                   _ipController.text = _lastWirelessIp;
                                   // 重置连接状态
@@ -235,12 +250,13 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             onSelected: (selected) {
                               if (selected && !_isWiredMode) {
                                 setState(() {
-                                  if (_ipController.text != '127.0.0.1') {
-                                    _lastWirelessIp = _ipController.text;
-                                  }
+                                  // 切换到有线模式前，保存当前的无线IP
+                                  _lastWirelessIp = _ipController.text;
+                                  
                                   _isWiredMode = true;
-                                  // 中文注释：切换到有线模式时默认填入 127.0.0.1，但允许用户后续修改
-                                  _ipController.text = '127.0.0.1';
+                                  // 恢复之前保存的有线IP
+                                  _ipController.text = _lastWiredIp;
+                                  
                                   // 重置连接状态
                                   _isConnected = false;
                                   _hasTested = false;
@@ -408,27 +424,57 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   Future<void> _initServerSettings() async {
     try {
       final prefs = await ref.read(sharedPreferencesProvider.future);
+      
+      // 读取分别存储的IP
+      final savedWirelessIp = prefs.getString('wireless_server_ip');
+      final savedWiredIp = prefs.getString('wired_server_ip');
+      // 读取上次的模式
+      final isWiredMode = prefs.getBool('is_wired_mode') ?? false;
+      
+      // 读取通用配置（兼容旧数据或作为当前生效配置）
       final savedIp = prefs.getString('server_ip');
       final savedPort = prefs.getInt('server_port');
+
+      // 初始化缓存变量
+      if (savedWirelessIp != null && savedWirelessIp.isNotEmpty) {
+        _lastWirelessIp = savedWirelessIp;
+      } else if (!isWiredMode && savedIp != null) {
+        // 如果没有专门的无线IP记录，但当前是无线模式且有通用IP，则认为是无线IP
+        _lastWirelessIp = savedIp;
+      }
+
+      if (savedWiredIp != null && savedWiredIp.isNotEmpty) {
+        _lastWiredIp = savedWiredIp;
+      } else if (isWiredMode && savedIp != null) {
+        // 如果没有专门的有线IP记录，但当前是有线模式且有通用IP，则认为是有线IP
+        _lastWiredIp = savedIp;
+      } else {
+        // 默认为空
+        _lastWiredIp = '';
+      }
+
       if (savedIp != null && savedIp.isNotEmpty && savedPort != null) {
-        _ipController.text = savedIp;
+        // 恢复模式状态
+        _isWiredMode = isWiredMode;
+        
+        // 根据恢复的模式设置输入框内容
+        if (_isWiredMode) {
+          _ipController.text = _lastWiredIp;
+        } else {
+          _ipController.text = _lastWirelessIp;
+        }
+        
         _portController.text = savedPort.toString();
         
-        // 中文注释：检测是否为有线模式IP (127.0.0.1)
-        if (savedIp == '127.0.0.1') {
-          _isWiredMode = true;
-        } else {
-          _isWiredMode = false;
-          _lastWirelessIp = savedIp;
-        }
-
         // 中文注释：仅当存在已保存的服务器配置时，初始化 WiFi 服务与 Dio 地址
         final ip = _ipController.text.trim();
-        final port = int.tryParse(_portController.text.trim()) ?? 3000;
-        final wifiService = ref.read(wifiServiceProvider);
-        wifiService.setServerAddress(ip, port);
-        final dio = ref.read(dioProvider);
-        dio.options.baseUrl = 'http://$ip:$port/api';
+        if (ip.isNotEmpty) {
+          final port = int.tryParse(_portController.text.trim()) ?? 3000;
+          final wifiService = ref.read(wifiServiceProvider);
+          wifiService.setServerAddress(ip, port);
+          final dio = ref.read(dioProvider);
+          dio.options.baseUrl = 'http://$ip:$port/api';
+        }
       } else {
         // 中文注释：无已保存配置时，不使用默认地址，留空等待用户手动配置
         _ipController.text = '';
