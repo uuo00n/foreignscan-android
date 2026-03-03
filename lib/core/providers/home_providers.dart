@@ -6,7 +6,6 @@ import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/record_service.dart';
 import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/services/style_image_service.dart';
-import 'package:foreignscan/core/services/local_cache_service.dart';
 import 'package:foreignscan/core/providers/app_providers.dart'; // 引入全局Provider定义，包含localCacheServiceProvider
 import 'package:foreignscan/models/style_image.dart';
 import 'package:logger/logger.dart';
@@ -35,7 +34,11 @@ final styleImagesForSelectedSceneProvider = FutureProvider.autoDispose<List<Styl
     return <StyleImage>[];
   }
 
-  final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
+  final selectedScene = homeState.selectedScene;
+  if (selectedScene == null) {
+    return <StyleImage>[];
+  }
+
   final images = await styleService.getStyleImagesByScene(selectedScene.id);
 
   // 预缓存：若存在首张样式图，先将其下载到本地，便于拍摄时离线查看
@@ -68,7 +71,10 @@ final referenceImageUrlProvider = FutureProvider.autoDispose<String?>((ref) asyn
   if (homeState.scenes.isEmpty) {
     return null;
   }
-  final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
+  final selectedScene = homeState.selectedScene;
+  if (selectedScene == null) {
+    return null;
+  }
 
   // 情况一：样式图列表可用且非空（通常为在线场景）
   if (styleImagesAsync.hasValue) {
@@ -152,9 +158,16 @@ class HomeState {
   }
 
   int get totalPages {
-    return inspectionRecords.isEmpty 
-        ? 0 
+    return inspectionRecords.isEmpty
+        ? 0
         : (inspectionRecords.length / recordsPerPage).ceil();
+  }
+
+  SceneData? get selectedScene {
+    if (scenes.isEmpty || selectedSceneIndex < 0 || selectedSceneIndex >= scenes.length) {
+      return null;
+    }
+    return scenes[selectedSceneIndex];
   }
 }
 
@@ -174,9 +187,14 @@ class HomeViewModel extends StateNotifier<HomeState> {
       
       final updatedScenes = _calculateScenesStatus(scenes, records);
 
+      final clampedIndex = updatedScenes.isEmpty
+          ? 0
+          : state.selectedSceneIndex.clamp(0, updatedScenes.length - 1);
+
       state = state.copyWith(
         scenes: updatedScenes,
         inspectionRecords: records,
+        selectedSceneIndex: clampedIndex,
         isLoading: false,
       );
     } catch (e) {

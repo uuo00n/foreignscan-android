@@ -1,0 +1,4 @@
+interface:
+  display_name: "ForeignScan Pad Dev"
+  short_description: "Build tablet-first Flutter UI aligned with ForeignScan patterns."
+  default_prompt: "Use $foreignscan-pad-development to implement a tablet-first Flutter page that follows this project style and architecture."

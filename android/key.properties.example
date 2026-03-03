@@ -1,0 +1,15 @@
+# Release 签名配置模板
+# 复制此文件为 key.properties 并填入实际值
+# 注意：key.properties 和 .jks 文件已在 .gitignore 中，请勿提交到版本控制
+
+# 密钥库文件路径（相对于 android 目录或绝对路径）
+storeFile=your-keystore.jks
+
+# 密钥库密码
+storePassword=your_store_password
+
+# 密钥别名
+keyAlias=your_key_alias
+
+# 密钥密码
+keyPassword=your_key_password

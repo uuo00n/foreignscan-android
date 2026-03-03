@@ -25,9 +25,11 @@ class CameraConfig {
 
 class NetworkConfig {
   const NetworkConfig();
-  
-  // 后端 API 基础地址（注意：在真机上不可使用 localhost，需要填写宿主机的局域网IP，例如 http://192.168.1.100:3000/api）
-  // 已根据你的后端地址修改为 172.20.10.3:3000
+
+  // 后端 API 基础地址
+  // 注意：此硬编码 IP 仅作为初始默认值，实际运行时会被 SharedPreferences 中
+  // 用户配置的服务器地址覆盖（见 app_drawer.dart 和 home_page.dart 中的服务器设置逻辑）。
+  // 在真机上不可使用 localhost，需要填写宿主机的局域网 IP。
   static const String apiBaseUrl = 'http://172.20.10.3:3000/api';
 
   static const Duration timeout = Duration(seconds: 10);

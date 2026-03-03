@@ -8,6 +8,11 @@
     <uses-feature android:name="android.hardware.camera" android:required="true"/>
     <uses-feature android:name="android.hardware.camera.autofocus"/>
     <uses-feature android:name="android.hardware.camera.front"/>
+    <!--
+        android:usesCleartextTraffic="true" 说明：
+        本应用运行于局域网环境，需与本地服务器（如 192.168.x.x）通过 HTTP 通信。
+        这是局域网开发/部署所必需的配置，生产环境若使用公网 HTTPS 服务可移除此属性。
+    -->
     <application
         android:label="foreignscan"
         android:name="${applicationName}"

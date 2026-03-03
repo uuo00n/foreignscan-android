@@ -5,6 +5,7 @@ import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/local_cache_service.dart';
 import 'package:dio/dio.dart';
+import 'package:logger/logger.dart';
 
 // 记录服务：从后端拉取图片记录并与本地缓存合并
 final recordServiceProvider = Provider<RecordService>((ref) {
@@ -13,6 +14,7 @@ final recordServiceProvider = Provider<RecordService>((ref) {
     ref.read(dioProvider),
     ref.read(sceneServiceProvider),
     ref.read(localCacheServiceProvider),
+    ref.read(loggerProvider),
   );
 });
 
@@ -21,10 +23,11 @@ class RecordService {
   final Dio _dio;
   final SceneService _sceneService;
   final LocalCacheService _cache;
+  final Logger _logger;
 
   static const String _recordsKey = 'inspection_records';
 
-  RecordService(this._prefs, this._dio, this._sceneService, this._cache);
+  RecordService(this._prefs, this._dio, this._sceneService, this._cache, this._logger);
 
   /// 获取拍摄记录（优先网络，失败兜底本地缓存）
   /// 说明：
@@ -165,7 +168,7 @@ class RecordService {
       await saveRecords(updated);
     } catch (e) {
       // 中文注释：本地保存失败时不抛出异常，仅打印日志，避免阻塞 UI 流程
-      print('添加检测记录到本地失败: $e');
+      _logger.w('添加检测记录到本地失败: $e');
     }
   }
 

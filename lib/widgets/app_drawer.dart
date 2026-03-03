@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/providers/home_providers.dart' hide loggerProvider;
 import 'package:foreignscan/core/providers/app_providers.dart';
-import 'package:logger/logger.dart';
 import 'package:foreignscan/core/providers/app_info_providers.dart';
 import 'package:foreignscan/widgets/about_app_dialog.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
@@ -131,7 +129,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         } else {
           await prefs.setString('wireless_server_ip', ip);
         }
-      } catch (_) {}
+      } catch (e) {
+        ref.read(loggerProvider).w('持久化服务器设置失败: $e');
+      }
 
       // 使样式图 Provider 失效并重新拉取，立刻刷新参考图
       ref.invalidate(styleImagesForSelectedSceneProvider);
@@ -480,7 +480,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         _ipController.text = '';
         _portController.text = '';
       }
-    } catch (_) {
+    } catch (e) {
+      ref.read(loggerProvider).w('读取服务器设置失败: $e');
       // 中文注释：读取失败时同样不填充默认地址，避免误用
       _ipController.text = '';
       _portController.text = '';

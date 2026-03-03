@@ -158,8 +158,8 @@ class _HomePageState extends ConsumerState<HomePage> {
           ref.read(homeViewModelProvider.notifier).initializeData();
         });
       }
-    } catch (_) {
-      // 忽略异常，避免影响正常启动
+    } catch (e) {
+      ref.read(loggerProvider).w('首次启动配置检查失败: $e');
     }
   }
 
@@ -391,7 +391,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 bool ok = false;
                                 try {
                                   ok = await wifiService.testConnection();
-                                } catch (_) {
+                                } catch (e) {
+                                  ref.read(loggerProvider).w('连接测试异常: $e');
                                   ok = false;
                                 }
                                 if (!mounted) return;
@@ -413,7 +414,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                                     } else {
                                       await prefs.setString('wireless_server_ip', ip);
                                     }
-                                  } catch (_) {}
+                                  } catch (e) {
+                                    ref.read(loggerProvider).w('保存服务器配置失败: $e');
+                                  }
                                   ref.invalidate(styleImagesForSelectedSceneProvider);
                                   // 初始化首页数据
                                   ref.read(homeViewModelProvider.notifier).initializeData();
@@ -494,8 +497,18 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _uploadLatestImage(BuildContext context, WidgetRef ref) async {
     final homeState = ref.read(homeViewModelProvider);
-    final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
-    
+    final selectedScene = homeState.selectedScene;
+
+    if (selectedScene == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('场景索引异常，请刷新重试'),
+          backgroundColor: AppTheme.warningColor,
+        ),
+      );
+      return;
+    }
+
     if (selectedScene.capturedImage == null || selectedScene.capturedImage!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -599,7 +612,30 @@ class _HomePageState extends ConsumerState<HomePage> {
       );
     }
 
-    final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
+    final selectedScene = homeState.selectedScene;
+    if (selectedScene == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: AppTheme.errorColor),
+            const SizedBox(height: 16),
+            Text(
+              '场景索引异常',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: () => homeViewModel.refreshData(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('刷新'),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Column(
       children: [
@@ -678,8 +714,18 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _navigateToCamera(BuildContext context, WidgetRef ref) async {
     final homeState = ref.read(homeViewModelProvider);
-    final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
-    
+    final selectedScene = homeState.selectedScene;
+
+    if (selectedScene == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('场景索引异常，请刷新重试'),
+          backgroundColor: AppTheme.warningColor,
+        ),
+      );
+      return;
+    }
+
     try {
       // 使用新的路由系统导航到相机页面
       final imagePath = await Navigator.push<String>(
@@ -717,8 +763,18 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _confirmTransfer(BuildContext context, WidgetRef ref) async {
     final homeState = ref.read(homeViewModelProvider);
-    final selectedScene = homeState.scenes[homeState.selectedSceneIndex];
+    final selectedScene = homeState.selectedScene;
     final homeViewModel = ref.read(homeViewModelProvider.notifier);
+
+    if (selectedScene == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('场景索引异常，请刷新重试'),
+          backgroundColor: AppTheme.warningColor,
+        ),
+      );
+      return;
+    }
 
     if (selectedScene.capturedImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
