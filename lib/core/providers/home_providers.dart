@@ -4,14 +4,14 @@ import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/models/inspection_record.dart';
 import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/record_service.dart';
-import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/services/style_image_service.dart';
 import 'package:foreignscan/core/providers/app_providers.dart'; // 引入全局Provider定义，包含localCacheServiceProvider
 import 'package:foreignscan/models/style_image.dart';
-import 'package:logger/logger.dart';
 
 // Home页面状态提供者
-final homeViewModelProvider = StateNotifierProvider<HomeViewModel, HomeState>((ref) {
+final homeViewModelProvider = StateNotifierProvider<HomeViewModel, HomeState>((
+  ref,
+) {
   return HomeViewModel(
     ref.read(sceneServiceProvider),
     ref.read(recordServiceProvider),
@@ -25,40 +25,43 @@ final scenesProvider = FutureProvider<List<SceneData>>((ref) async {
 });
 
 // 当前选中场景的样式图（模板参考图）列表提供者
-final styleImagesForSelectedSceneProvider = FutureProvider.autoDispose<List<StyleImage>>((ref) async {
-  final homeState = ref.watch(homeViewModelProvider);
-  final styleService = ref.read(styleImageServiceProvider);
-  final cacheService = ref.read(localCacheServiceProvider);
+final styleImagesForSelectedSceneProvider =
+    FutureProvider.autoDispose<List<StyleImage>>((ref) async {
+      final homeState = ref.watch(homeViewModelProvider);
+      final styleService = ref.read(styleImageServiceProvider);
+      final cacheService = ref.read(localCacheServiceProvider);
 
-  if (homeState.scenes.isEmpty) {
-    return <StyleImage>[];
-  }
+      if (homeState.scenes.isEmpty) {
+        return <StyleImage>[];
+      }
 
-  final selectedScene = homeState.selectedScene;
-  if (selectedScene == null) {
-    return <StyleImage>[];
-  }
+      final selectedScene = homeState.selectedScene;
+      if (selectedScene == null) {
+        return <StyleImage>[];
+      }
 
-  final images = await styleService.getStyleImagesByScene(selectedScene.id);
+      final images = await styleService.getStyleImagesByScene(selectedScene.id);
 
-  // 预缓存：若存在首张样式图，先将其下载到本地，便于拍摄时离线查看
-  if (images.isNotEmpty) {
-    final first = images.first;
-    final remoteUrl = styleService.buildImageUrl(first);
-    // 子目录：style_images/<sceneId>；文件名：<styleId>_<filename或style.jpg>
-    final filename = '${first.id}_${first.filename ?? 'style.jpg'}';
-    await cacheService.ensureCachedImage(
-      url: remoteUrl,
-      subdir: 'style_images/${selectedScene.id}',
-      filename: filename,
-    );
-  }
+      // 预缓存：若存在首张样式图，先将其下载到本地，便于拍摄时离线查看
+      if (images.isNotEmpty) {
+        final first = images.first;
+        final remoteUrl = styleService.buildImageUrl(first);
+        // 子目录：style_images/<sceneId>；文件名：<styleId>_<filename或style.jpg>
+        final filename = '${first.id}_${first.filename ?? 'style.jpg'}';
+        await cacheService.ensureCachedImage(
+          url: remoteUrl,
+          subdir: 'style_images/${selectedScene.id}',
+          filename: filename,
+        );
+      }
 
-  return images;
-});
+      return images;
+    });
 
 // 当前选中场景的首张样式图的完整URL（用于 SceneDisplay 的模板参考图）
-final referenceImageUrlProvider = FutureProvider.autoDispose<String?>((ref) async {
+final referenceImageUrlProvider = FutureProvider.autoDispose<String?>((
+  ref,
+) async {
   // 中文说明：
   // 1) 优先读取样式图列表（在线时），若有数据则计算首张图的本地缓存路径并返回；
   // 2) 若无数据（离线/加载中/错误），则直接在本地 style_images/<sceneId>/ 目录中查找已有缓存文件作为兜底；
@@ -89,7 +92,7 @@ final referenceImageUrlProvider = FutureProvider.autoDispose<String?>((ref) asyn
         filename: filename,
       );
       final file = File(localPath);
-      if (file.existsSync()) {
+      if (await file.exists()) {
         return localPath; // 本地已缓存，优先返回
       }
       return remoteUrl; // 兜底返回网络URL
@@ -97,7 +100,9 @@ final referenceImageUrlProvider = FutureProvider.autoDispose<String?>((ref) asyn
   }
 
   // 情况二：无样式图数据（离线/加载中/错误）—> 本地兜底：从 style_images/<sceneId>/ 中找首个文件
-  final cached = await cacheService.findFirstFileInSubdir('style_images/${selectedScene.id}');
+  final cached = await cacheService.findFirstFileInSubdir(
+    'style_images/${selectedScene.id}',
+  );
   return cached; // 可能为 null；UI 层需做无图兜底处理
 });
 
@@ -105,16 +110,6 @@ final referenceImageUrlProvider = FutureProvider.autoDispose<String?>((ref) asyn
 final recordsProvider = FutureProvider<List<InspectionRecord>>((ref) async {
   final service = ref.read(recordServiceProvider);
   return await service.getRecords();
-});
-
-// Logger提供者
-final loggerProvider = Provider<Logger>((ref) {
-  return Logger();
-});
-
-// WiFi通信服务提供者
-final wifiServiceProvider = Provider<WiFiCommunicationService>((ref) {
-  return WiFiCommunicationService(ref.read(loggerProvider));
 });
 
 // Home页面状态
@@ -164,7 +159,9 @@ class HomeState {
   }
 
   SceneData? get selectedScene {
-    if (scenes.isEmpty || selectedSceneIndex < 0 || selectedSceneIndex >= scenes.length) {
+    if (scenes.isEmpty ||
+        selectedSceneIndex < 0 ||
+        selectedSceneIndex >= scenes.length) {
       return null;
     }
     return scenes[selectedSceneIndex];
@@ -176,15 +173,18 @@ class HomeViewModel extends StateNotifier<HomeState> {
   final SceneService _sceneService;
   final RecordService _recordService;
 
-  HomeViewModel(this._sceneService, this._recordService) : super(const HomeState());
+  HomeViewModel(this._sceneService, this._recordService)
+    : super(const HomeState());
 
   Future<void> initializeData({bool forceOffline = false}) async {
     try {
       state = state.copyWith(isLoading: true, errorMessage: null);
-      
+
       final scenes = await _sceneService.getScenes(forceOffline: forceOffline);
-      final records = await _recordService.getRecords(forceOffline: forceOffline);
-      
+      final records = await _recordService.getRecords(
+        forceOffline: forceOffline,
+      );
+
       final updatedScenes = _calculateScenesStatus(scenes, records);
 
       final clampedIndex = updatedScenes.isEmpty
@@ -198,45 +198,51 @@ class HomeViewModel extends StateNotifier<HomeState> {
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: '数据加载失败: $e',
-      );
+      state = state.copyWith(isLoading: false, errorMessage: '数据加载失败: $e');
     }
   }
 
   // 提取出来的状态计算逻辑
-  List<SceneData> _calculateScenesStatus(List<SceneData> scenes, List<InspectionRecord> records) {
+  List<SceneData> _calculateScenesStatus(
+    List<SceneData> scenes,
+    List<InspectionRecord> records,
+  ) {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
     final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
-    
+
     return scenes.map((scene) {
       // 1. 筛选出该场景的所有记录
-      final sceneRecords = records.where((r) => r.sceneName == scene.name).toList();
-      
+      final sceneRecords = records
+          .where((r) => r.sceneName == scene.name)
+          .toList();
+
       if (sceneRecords.isEmpty) {
         // 无记录 -> 重置状态
         return scene.copyWith(latestStatus: 'none', hasIssue: false);
       }
-      
+
       // 2. 按时间倒序排列，取最新一条
       sceneRecords.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       final latest = sceneRecords.first;
-      
+
       // 3. 判断是否为今日记录
-      final isToday = latest.timestamp.isAfter(todayStart) && latest.timestamp.isBefore(todayEnd);
-      
+      final isToday =
+          latest.timestamp.isAfter(todayStart) &&
+          latest.timestamp.isBefore(todayEnd);
+
       if (isToday) {
         // 是今日记录 -> 映射状态
-        final rStatus = latest.status;
+        final statusType = latest.statusType;
         String newStatus;
         bool newHasIssue;
-        
-        if (rStatus == '存在缺陷' || rStatus == '异常') {
+
+        if (statusType == InspectionStatusType.abnormal) {
           newStatus = '已检测';
           newHasIssue = true;
-        } else if (rStatus == '已检测' || rStatus == '合格' || rStatus == '已确认') {
+        } else if (statusType == InspectionStatusType.detected ||
+            statusType == InspectionStatusType.qualified ||
+            statusType == InspectionStatusType.verified) {
           newStatus = '已检测';
           newHasIssue = false;
         } else {
@@ -244,7 +250,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
           newStatus = '待检测';
           newHasIssue = false;
         }
-        
+
         return scene.copyWith(latestStatus: newStatus, hasIssue: newHasIssue);
       } else {
         // 非今日记录 -> 不显示状态点
@@ -274,13 +280,18 @@ class HomeViewModel extends StateNotifier<HomeState> {
   Future<void> addInspectionRecord(InspectionRecord record) async {
     try {
       await _recordService.addRecord(record);
-      
-      final updatedRecords = List<InspectionRecord>.from(state.inspectionRecords);
+
+      final updatedRecords = List<InspectionRecord>.from(
+        state.inspectionRecords,
+      );
       updatedRecords.insert(0, record);
-      
+
       // 添加记录后，重新计算场景状态，确保UI上的黄点/绿点/红点即时更新
-      final updatedScenes = _calculateScenesStatus(state.scenes, updatedRecords);
-      
+      final updatedScenes = _calculateScenesStatus(
+        state.scenes,
+        updatedRecords,
+      );
+
       state = state.copyWith(
         inspectionRecords: updatedRecords,
         scenes: updatedScenes,
@@ -298,9 +309,9 @@ class HomeViewModel extends StateNotifier<HomeState> {
         }
         return scene;
       }).toList();
-      
+
       state = state.copyWith(scenes: updatedScenes);
-      
+
       await _sceneService.updateSceneImage(sceneId, imagePath);
     } catch (e) {
       state = state.copyWith(errorMessage: '更新场景图片失败: $e');
@@ -308,7 +319,10 @@ class HomeViewModel extends StateNotifier<HomeState> {
   }
 
   /// 更新场景的传输状态（例如上传成功后标记为已传输）
-  Future<void> updateSceneTransferStatus(String sceneId, bool isTransferred) async {
+  Future<void> updateSceneTransferStatus(
+    String sceneId,
+    bool isTransferred,
+  ) async {
     try {
       // 更新内存中的场景列表
       final updatedScenes = state.scenes.map((scene) {

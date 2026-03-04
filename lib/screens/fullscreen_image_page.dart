@@ -10,11 +10,7 @@ class FullscreenImagePage extends StatelessWidget {
   final String imageUrl; // 图片的完整URL或本地文件路径
   final String? heroTag; // Hero 动画的标签（与列表中的相同）
 
-  const FullscreenImagePage({
-    Key? key,
-    required this.imageUrl,
-    this.heroTag,
-  }) : super(key: key);
+  const FullscreenImagePage({super.key, required this.imageUrl, this.heroTag});
 
   @override
   Widget build(BuildContext context) {
@@ -24,22 +20,14 @@ class FullscreenImagePage extends StatelessWidget {
         // 使用 Stack 叠加关闭按钮与图片区域
         child: Stack(
           children: [
-            // 外层包裹 GestureDetector：轻触任意空白区域返回
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => Navigator.of(context).pop(),
-              child: Center(
-                // 使用 InteractiveViewer 支持缩放与拖拽查看
-                child: InteractiveViewer(
-                  minScale: 1.0,
-                  maxScale: 4.0,
-                  child: heroTag != null
-                      ? Hero(
-                          tag: heroTag!,
-                          child: _buildImage(),
-                        )
-                      : _buildImage(),
-                ),
+            Center(
+              // 使用 InteractiveViewer 支持缩放与拖拽查看
+              child: InteractiveViewer(
+                minScale: 1.0,
+                maxScale: 4.0,
+                child: heroTag != null
+                    ? Hero(tag: heroTag!, child: _buildImage())
+                    : _buildImage(),
               ),
             ),
             // 右上角关闭按钮，提供明确的关闭入口
@@ -63,7 +51,8 @@ class FullscreenImagePage extends StatelessWidget {
   /// - 若为 http/https 则使用 Image.network；
   /// - 否则尝试当成本地文件路径使用 Image.file。
   Widget _buildImage() {
-    final isNetwork = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
+    final isNetwork =
+        imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
     if (isNetwork) {
       return Image.network(
         imageUrl,
@@ -80,11 +69,18 @@ class FullscreenImagePage extends StatelessWidget {
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.broken_image, size: 64, color: AppTheme.textInverse.withValues(alpha: 0.7)),
+              Icon(
+                Icons.broken_image,
+                size: 64,
+                color: AppTheme.textInverse.withValues(alpha: 0.7),
+              ),
               SizedBox(height: 12),
               Text(
                 '图片加载失败',
-                style: TextStyle(color: AppTheme.textInverse.withValues(alpha: 0.7), fontSize: 14),
+                style: TextStyle(
+                  color: AppTheme.textInverse.withValues(alpha: 0.7),
+                  fontSize: 14,
+                ),
               ),
             ],
           );
@@ -93,37 +89,29 @@ class FullscreenImagePage extends StatelessWidget {
     }
 
     final file = File(imageUrl);
-    if (file.existsSync()) {
-      return Image.file(
-        file,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.broken_image, size: 64, color: AppTheme.textInverse.withValues(alpha: 0.7)),
-              SizedBox(height: 12),
-              Text(
-                '图片加载失败',
-                style: TextStyle(color: AppTheme.textInverse.withValues(alpha: 0.7), fontSize: 14),
+    return Image.file(
+      file,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.broken_image,
+              size: 64,
+              color: AppTheme.textInverse.withValues(alpha: 0.7),
+            ),
+            SizedBox(height: 12),
+            Text(
+              '图片加载失败',
+              style: TextStyle(
+                color: AppTheme.textInverse.withValues(alpha: 0.7),
+                fontSize: 14,
               ),
-            ],
-          );
-        },
-      );
-    }
-
-    // 兜底：路径无效
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.broken_image, size: 64, color: AppTheme.textInverse.withValues(alpha: 0.7)),
-        SizedBox(height: 12),
-        Text(
-          '图片不存在',
-          style: TextStyle(color: AppTheme.textInverse.withValues(alpha: 0.7), fontSize: 14),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 }

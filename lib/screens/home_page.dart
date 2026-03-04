@@ -2,18 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/theme/app_theme.dart';
-import 'package:foreignscan/core/providers/home_providers.dart' hide loggerProvider;
+import 'package:foreignscan/core/providers/home_providers.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
 import 'package:foreignscan/core/widgets/loading_widget.dart';
 import 'package:foreignscan/core/widgets/error_widget.dart';
-import 'package:foreignscan/widgets/scene_selector.dart';
-import 'package:foreignscan/widgets/scene_display.dart';
-import 'package:foreignscan/widgets/records_section.dart';
-import 'package:foreignscan/models/inspection_record.dart';
-import 'package:foreignscan/screens/camera_screen.dart';
 import 'package:foreignscan/core/widgets/app_bar_actions.dart';
 import 'package:foreignscan/widgets/app_drawer.dart';
+import 'package:foreignscan/screens/home/controllers/home_workflow_controller.dart';
+import 'package:foreignscan/screens/home/widgets/home_main_layout.dart';
+import 'package:foreignscan/screens/home/widgets/server_setup_dialog.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -23,12 +21,11 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  // 中文注释：首次安装时提示配置服务器的输入框与状态
-  final TextEditingController _serverIpController = TextEditingController();
-  final TextEditingController _serverPortController = TextEditingController();
   bool _hasPromptedSetup = false; // 防止重复弹窗
-  bool _isTestingServer = false; // 测试连接中的状态
-  String? _testMsg; // 测试结果提示文案
+
+  HomeWorkflowController _workflow(WidgetRef ref) {
+    return HomeWorkflowController(ref);
+  }
 
   @override
   void initState() {
@@ -37,13 +34,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _promptServerSetupIfNeeded();
     });
-  }
-
-  @override
-  void dispose() {
-    _serverIpController.dispose();
-    _serverPortController.dispose();
-    super.dispose();
   }
 
   @override
@@ -75,7 +65,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     // 使用WillPopScope处理返回手势
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         // 显示退出确认对话框
         _showExitConfirmDialog(context);
@@ -87,14 +77,14 @@ class _HomePageState extends ConsumerState<HomePage> {
           onUploadPressed: () => _uploadLatestImage(context, ref),
           onSyncPressed: _handleSync,
         ),
-        body: homeState.isLoading 
+        body: homeState.isLoading
             ? const LoadingWidget(message: '正在加载数据...')
             : homeState.errorMessage != null
-                ? ErrorWidgetCustom(
-                    message: homeState.errorMessage!,
-                    onRetry: () => homeViewModel.refreshData(),
-                  )
-                : _buildBody(context, ref, homeState, homeViewModel),
+            ? ErrorWidgetCustom(
+                message: homeState.errorMessage!,
+                onRetry: () => homeViewModel.refreshData(),
+              )
+            : _buildBody(context, ref, homeState, homeViewModel),
       ),
     );
   }
@@ -104,9 +94,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       // 中文注释：使用 Builder 获取位于 Scaffold 之下的上下文，
       // 通过 Scaffold.of(context).openDrawer() 打开抽屉，避免对 GlobalKey 的依赖。
       flexibleSpace: Container(
-        decoration: const BoxDecoration(
-          gradient: AppTheme.primaryGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppTheme.primaryGradient),
       ),
       leading: Builder(
         builder: (ctx) => IconButton(
@@ -123,10 +111,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           showNewDetection: false,
           onNewDetectionPressed: () => _startNewInspection(context, ref),
           onDetectionResultsPressed: () => AppRouter.navigateToDetectionResult(
-            const DetectionResultArguments(
-              imagePath: '',
-              detectionType: '',
-            ),
+            const DetectionResultArguments(imagePath: '', detectionType: ''),
           ),
         ),
       ],
@@ -137,22 +122,24 @@ class _HomePageState extends ConsumerState<HomePage> {
   Future<void> _promptServerSetupIfNeeded() async {
     if (_hasPromptedSetup) return; // 防止重复执行
     try {
-      final prefs = await ref.read(sharedPreferencesProvider.future);
-      final savedIp = prefs.getString('server_ip');
-      final savedPort = prefs.getInt('server_port');
-      if (savedIp == null || savedIp.isEmpty || savedPort == null) {
+      final serverConfigService = ref.read(serverConfigServiceProvider);
+      final config = await serverConfigService.load();
+      if (!config.isConfigured) {
         _hasPromptedSetup = true;
-        _serverIpController.text = savedIp ?? '';
-        _serverPortController.text = savedPort?.toString() ?? '';
-        _showServerSetupDialog();
+        await _showServerSetupDialog(
+          initialIp: config.ip ?? '',
+          initialPort: config.port,
+        );
       } else {
-        // 配置已存在，应用配置并初始化数据
+        // 配置已存在，统一应用并初始化数据
         final dio = ref.read(dioProvider);
-        dio.options.baseUrl = 'http://$savedIp:$savedPort/api';
-        
         final wifiService = ref.read(wifiServiceProvider);
-        wifiService.setServerAddress(savedIp, savedPort);
-        
+        await serverConfigService.applyToClients(
+          dio: dio,
+          wifiService: wifiService,
+          config: config,
+        );
+
         // 延迟初始化数据，避免在build过程中触发状态更新
         Future.microtask(() {
           ref.read(homeViewModelProvider.notifier).initializeData();
@@ -164,311 +151,59 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   // 中文注释：首次安装的服务器设置弹窗
-  Future<void> _showServerSetupDialog() async {
-    // 临时状态变量，用于在弹窗内部管理模式切换
-    bool isWiredMode = false;
-    String lastWirelessIp = '';
-    String lastWiredIp = '';
-
-    await showDialog(
+  Future<void> _showServerSetupDialog({
+    required String initialIp,
+    required int? initialPort,
+  }) async {
+    final result = await showServerSetupDialog(
       context: context,
-      barrierDismissible: false, // 首次安装强制配置，禁止点击遮罩关闭
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (dCtx, setState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.settings_ethernet_rounded,
-                      size: 48,
-                      color: AppTheme.primaryColor,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    '配置服务器',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '首次使用需连接服务器以同步数据',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.textSecondary,
-                      fontWeight: FontWeight.normal,
-                    ),
-                  ),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 模式选择
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ChoiceChip(
-                            label: const Center(child: Text('无线模式')),
-                            selected: !isWiredMode,
-                            onSelected: (selected) {
-                              if (selected && isWiredMode) {
-                                setState(() {
-                                  // 切换前保存有线IP
-                                  lastWiredIp = _serverIpController.text;
-                                  
-                                  isWiredMode = false;
-                                  // 恢复无线IP
-                                  _serverIpController.text = lastWirelessIp;
-                                  // 重置状态
-                                  _isTestingServer = false;
-                                  _testMsg = null;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ChoiceChip(
-                            label: const Center(child: Text('有线模式')),
-                            selected: isWiredMode,
-                            onSelected: (selected) {
-                              if (selected && !isWiredMode) {
-                                setState(() {
-                                  // 切换前保存无线IP
-                                  lastWirelessIp = _serverIpController.text;
-                                  
-                                  isWiredMode = true;
-                                  // 恢复有线IP
-                                  _serverIpController.text = lastWiredIp;
-                                  
-                                  // 重置状态
-                                  _isTestingServer = false;
-                                  _testMsg = null;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _serverIpController,
-                      decoration: InputDecoration(
-                        labelText: '服务器IP',
-                        hintText: '例如: 192.168.1.100',
-                        prefixIcon: const Icon(Icons.computer_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        filled: true,
-                        fillColor: AppTheme.backgroundLight,
-                      ),
-                      keyboardType: TextInputType.numberWithOptions(decimal: true),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _serverPortController,
-                      decoration: InputDecoration(
-                        labelText: '端口',
-                        hintText: '例如: 3000',
-                        prefixIcon: const Icon(Icons.numbers_rounded),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        filled: true,
-                        fillColor: AppTheme.backgroundLight,
-                      ),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 16),
-                    // 状态反馈区域
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _testMsg == null
-                            ? Colors.transparent
-                            : (_isTestingServer
-                                ? AppTheme.primaryColor.withValues(alpha: 0.05)
-                                : (_testMsg == '连接成功' ? AppTheme.successColor.withValues(alpha: 0.05) : AppTheme.errorColor.withValues(alpha: 0.05))),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: _testMsg == null
-                              ? Colors.transparent
-                              : (_isTestingServer
-                                  ? AppTheme.primaryColor.withValues(alpha: 0.3)
-                                  : (_testMsg == '连接成功' ? AppTheme.successColor.withValues(alpha: 0.3) : AppTheme.errorColor.withValues(alpha: 0.3))),
-                        ),
-                      ),
-                      child: _testMsg == null
-                          ? const SizedBox.shrink()
-                          : Row(
-                              children: [
-                                SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: _isTestingServer
-                                      ? const CircularProgressIndicator(strokeWidth: 2)
-                                      : Icon(
-                                          _testMsg == '连接成功'
-                                              ? Icons.check_circle_rounded
-                                              : Icons.error_rounded,
-                                          size: 20,
-                                          color: _testMsg == '连接成功'
-                                              ? AppTheme.successColor
-                                              : AppTheme.errorColor,
-                                        ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    _isTestingServer ? '正在测试连接...' : _testMsg!,
-                                    style: TextStyle(
-                                      color: _isTestingServer
-                                          ? AppTheme.primaryColor
-                                          : (_testMsg == '连接成功'
-                                              ? AppTheme.successColor
-                                              : AppTheme.errorColor),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-              actions: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          foregroundColor: AppTheme.textSecondary,
-                        ),
-                        child: const Text('稍后再说'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2, // 让确认按钮占据更多空间
-                      child: ElevatedButton(
-                        onPressed: _isTestingServer
-                            ? null
-                            : () async {
-                                setState(() {
-                                  _isTestingServer = true;
-                                  _testMsg = null;
-                                });
-                                final ip = _serverIpController.text.trim();
-                                final port = int.tryParse(_serverPortController.text.trim());
-                                if (ip.isEmpty || port == null || port <= 0) {
-                                  setState(() {
-                                    _isTestingServer = false;
-                                    _testMsg = '请输入有效的IP和端口';
-                                  });
-                                  return;
-                                }
-                                // 更新WiFi服务地址并测试连接
-                                final wifiService = ref.read(wifiServiceProvider);
-                                wifiService.setServerAddress(ip, port);
-                                bool ok = false;
-                                try {
-                                  ok = await wifiService.testConnection();
-                                } catch (e) {
-                                  ref.read(loggerProvider).w('连接测试异常: $e');
-                                  ok = false;
-                                }
-                                if (!mounted) return;
-                                if (ok) {
-                                  // 成功：更新 Dio baseUrl、持久化、刷新相关Provider
-                                  final dio = ref.read(dioProvider);
-                                  dio.options.baseUrl = 'http://$ip:$port/api';
-                                  try {
-                                    final prefs = await ref.read(sharedPreferencesProvider.future);
-                                    await prefs.setString('server_ip', ip);
-                                    await prefs.setInt('server_port', port);
-                                    
-                                    // 保存当前模式
-                                    await prefs.setBool('is_wired_mode', isWiredMode);
-                                    
-                                    // 分别保存对应模式的IP
-                                    if (isWiredMode) {
-                                      await prefs.setString('wired_server_ip', ip);
-                                    } else {
-                                      await prefs.setString('wireless_server_ip', ip);
-                                    }
-                                  } catch (e) {
-                                    ref.read(loggerProvider).w('保存服务器配置失败: $e');
-                                  }
-                                  ref.invalidate(styleImagesForSelectedSceneProvider);
-                                  // 初始化首页数据
-                                  ref.read(homeViewModelProvider.notifier).initializeData();
-                                  setState(() {
-                                    _testMsg = '连接成功';
-                                    _isTestingServer = false;
-                                  });
-                                  
-                                  // 延迟关闭，让用户看到成功状态
-                                  await Future.delayed(const Duration(milliseconds: 500));
-                                  if (!dCtx.mounted) return;
-                                  
-                                  Navigator.of(ctx).pop();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('服务器已配置成功'),
-                                      backgroundColor: AppTheme.successColor,
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
-                                } else {
-                                  setState(() {
-                                    _isTestingServer = false;
-                                    _testMsg = '连接失败，请检查IP与端口';
-                                  });
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          foregroundColor: AppTheme.textInverse,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          '测试连接并保存',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
-        );
+      initialIp: initialIp,
+      initialPort: initialPort,
+      onTestConnection: (ip, port) async {
+        final wifiService = ref.read(wifiServiceProvider);
+        wifiService.setServerAddress(ip, port);
+        try {
+          return await wifiService.testConnection();
+        } catch (e) {
+          ref.read(loggerProvider).w('连接测试异常: $e');
+          return false;
+        }
       },
     );
+
+    if (!mounted || result == null) return;
+
+    final serverConfigService = ref.read(serverConfigServiceProvider);
+    final dio = ref.read(dioProvider);
+    final wifiService = ref.read(wifiServiceProvider);
+
+    try {
+      await serverConfigService.saveCurrent(
+        ip: result.ip,
+        port: result.port,
+        isWiredMode: result.isWiredMode,
+      );
+      await serverConfigService.applyToClients(
+        dio: dio,
+        wifiService: wifiService,
+      );
+    } catch (e) {
+      ref.read(loggerProvider).w('保存服务器配置失败: $e');
+    }
+
+    ref.invalidate(styleImagesForSelectedSceneProvider);
+    ref.read(homeViewModelProvider.notifier).initializeData();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('服务器已配置成功'),
+        backgroundColor: AppTheme.successColor,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
-  
+
   // 显示退出确认对话框
   Future<void> _showExitConfirmDialog(BuildContext context) async {
     return showDialog(
@@ -509,7 +244,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
 
-    if (selectedScene.capturedImage == null || selectedScene.capturedImage!.isEmpty) {
+    if (selectedScene.capturedImage == null ||
+        selectedScene.capturedImage!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('没有可上传的图片，请先拍摄照片'),
@@ -518,7 +254,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       );
       return;
     }
-    
+
     // 显示上传进度对话框
     showDialog(
       context: context,
@@ -535,44 +271,19 @@ class _HomePageState extends ConsumerState<HomePage> {
         ),
       ),
     );
-    
-    try {
-      final wifiService = ref.read(wifiServiceProvider);
-      final result = await wifiService.uploadImageFromCamera(
-        selectedScene.capturedImage!,
-        sceneId: selectedScene.id,
-      );
-      
-      if (context.mounted) {
-        Navigator.pop(context); // 关闭进度对话框
-        
-        if (result != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('图片上传成功'),
-              backgroundColor: AppTheme.successColor,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('图片上传失败，请检查网络连接和服务器设置'),
-              backgroundColor: AppTheme.errorColor,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context); // 关闭进度对话框
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('上传出错: $e'),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
-      }
+
+    final success = await _workflow(ref).uploadSceneImage(selectedScene);
+    if (!context.mounted) {
+      return;
     }
+
+    Navigator.pop(context); // 关闭进度对话框
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success ? '图片上传成功' : '图片上传失败，请检查网络连接和服务器设置'),
+        backgroundColor: success ? AppTheme.successColor : AppTheme.errorColor,
+      ),
+    );
   }
 
   Widget _buildBody(
@@ -590,16 +301,16 @@ class _HomePageState extends ConsumerState<HomePage> {
             const SizedBox(height: 16),
             Text(
               '暂无场景数据',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppTheme.textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 8),
             Text(
               '请联系管理员添加检测场景',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -618,13 +329,17 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: AppTheme.errorColor),
+            const Icon(
+              Icons.error_outline,
+              size: 64,
+              color: AppTheme.errorColor,
+            ),
             const SizedBox(height: 16),
             Text(
               '场景索引异常',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppTheme.textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 8),
             ElevatedButton.icon(
@@ -637,60 +352,25 @@ class _HomePageState extends ConsumerState<HomePage> {
       );
     }
 
-    return Column(
-      children: [
-        Expanded(
-          flex: 6,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SceneSelector(
-                  scenes: homeState.scenes,
-                  selectedIndex: homeState.selectedSceneIndex,
-                  onSceneSelected: (index) => homeViewModel.selectScene(index),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Builder(
-                    builder: (_) {
-                      // 中文说明：
-                      // 传入加载状态以在SceneDisplay中显示加载动画，同时传入已解析的URL/路径。
-                      final refImageAsync = ref.watch(referenceImageUrlProvider);
-                      return SceneDisplay(
-                        scene: selectedScene,
-                        onCaptureClick: () => _navigateToCamera(context, ref),
-                        onConfirmTransfer: () => _confirmTransfer(context, ref),
-                        onTransferAll: () => _transferAll(context, ref), // 中文注释：新增“全部传输”入口，触发批量传输逻辑
-                        referenceImageUrl: refImageAsync.maybeWhen(
-                          data: (v) => v,
-                          orElse: () => null,
-                        ),
-                        isReferenceLoading: refImageAsync.isLoading,
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        RecordsSection(
-          records: homeState.inspectionRecords,
-          currentPage: homeState.currentRecordPage,
-          recordsPerPage: homeState.recordsPerPage,
-          totalPages: homeState.totalPages,
-          onPreviousPage: () => homeViewModel.previousRecordPage(),
-          onNextPage: () => homeViewModel.nextRecordPage(),
-        ),
-      ],
+    final refImageAsync = ref.watch(referenceImageUrlProvider);
+    return HomeMainLayout(
+      homeState: homeState,
+      homeViewModel: homeViewModel,
+      selectedScene: selectedScene,
+      onCaptureClick: () => _navigateToCamera(context, ref),
+      onConfirmTransfer: () => _confirmTransfer(context, ref),
+      onTransferAll: () => _transferAll(context, ref),
+      referenceImageUrl: refImageAsync.maybeWhen(
+        data: (v) => v,
+        orElse: () => null,
+      ),
+      isReferenceLoading: refImageAsync.isLoading,
     );
   }
 
   Future<void> _startNewInspection(BuildContext context, WidgetRef ref) async {
     final homeViewModel = ref.read(homeViewModelProvider.notifier);
-    
+
     if (ref.read(homeViewModelProvider).scenes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -703,7 +383,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     // 重置到第一个场景
     homeViewModel.selectScene(0);
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('请选择检测场景开始检测'),
@@ -727,19 +407,14 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     try {
-      // 使用新的路由系统导航到相机页面
-      final imagePath = await Navigator.push<String>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const CameraScreen(),
-        ),
-      );
-      
+      // 使用统一路由系统导航到相机页面
+      final imagePath = await AppRouter.navigateToCameraForResult();
+
       // 处理相机返回的结果
       if (imagePath != null) {
         final homeViewModel = ref.read(homeViewModelProvider.notifier);
         await homeViewModel.updateSceneImage(selectedScene.id, imagePath);
-        
+
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -764,7 +439,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   Future<void> _confirmTransfer(BuildContext context, WidgetRef ref) async {
     final homeState = ref.read(homeViewModelProvider);
     final selectedScene = homeState.selectedScene;
-    final homeViewModel = ref.read(homeViewModelProvider.notifier);
 
     if (selectedScene == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -809,6 +483,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       if (shouldRetransfer != true) return;
     }
 
+    if (!context.mounted) return;
+
     // 显示上传进度对话框
     showDialog(
       context: context,
@@ -826,77 +502,22 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
     );
 
-    try {
-      // 使用WiFi服务上传图片
-      final wifiService = ref.read(wifiServiceProvider);
-      final result = await wifiService.uploadImageFromCamera(
-        selectedScene.capturedImage!,
-        sceneId: selectedScene.id,
-      );
-      
-      if (context.mounted) {
-        Navigator.pop(context); // 关闭进度对话框
-        
-        if (result != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('传输成功'),
-              backgroundColor: AppTheme.successColor,
-            ),
-          );
-          
-          // 添加检测记录（改造为使用后端返回的 imageId 与图片访问URL）
-          // 中文说明：
-          // - 后端返回 result['imageId'] 与 result['path']（形如 /uploads/images/<scene>/<file>）
-          // - WiFi 服务提供 serverAddress（例如 http://172.20.10.3:3000），拼接形成完整URL
-          final wifiSvc = ref.read(wifiServiceProvider);
-          final String imageId = (result['imageId']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString());
-          final String relativePath = (result['path']?.toString() ?? result['accessPath']?.toString() ?? '');
-          String fullUrl = relativePath;
-          if (relativePath.isNotEmpty) {
-            final String base = wifiSvc.serverAddress; // 不包含 /api
-            // 确保 relativePath 以 '/' 开头
-            final String normalizedRel = relativePath.startsWith('/') ? relativePath : '/$relativePath';
-            // 避免 base 末尾有 '/' 时重复斜杠
-            final String normalizedBase = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-            fullUrl = '$normalizedBase$normalizedRel';
-          }
-
-          final newRecord = InspectionRecord(
-            id: imageId,
-            sceneName: selectedScene.name,
-            imagePath: fullUrl.isNotEmpty ? fullUrl : selectedScene.capturedImage!,
-            timestamp: DateTime.now(),
-            status: '已上传',
-          );
-
-          await homeViewModel.addInspectionRecord(newRecord);
-
-          // 上传成功后，标记场景为已传输并记录传输时间
-          // 中文说明：
-          // - 更新 isTransferred=true，使按钮文案切换为“重新传输”，卡片边框变为绿色
-          // - 记录 transferTime=now，便于后续审计或显示
-          await homeViewModel.updateSceneTransferStatus(selectedScene.id, true);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('传输失败，请检查网络连接和服务器设置'),
-              backgroundColor: AppTheme.errorColor,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context); // 关闭进度对话框
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('传输出错: $e'),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
-      }
+    final result = await _workflow(ref).transferScene(selectedScene);
+    if (!context.mounted) {
+      return;
     }
+
+    Navigator.pop(context); // 关闭进度对话框
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.success ? '传输成功' : (result.errorMessage ?? '传输失败'),
+        ),
+        backgroundColor: result.success
+            ? AppTheme.successColor
+            : AppTheme.errorColor,
+      ),
+    );
   }
 
   /// 批量传输：对所有“已拍摄且未传输”的场景执行图片传输
@@ -906,11 +527,12 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// 3) 每个场景成功后添加检测记录并标记 isTransferred=true；
   /// 4) 完成后弹出汇总提示（成功/失败数量）。
   Future<void> _transferAll(BuildContext context, WidgetRef ref) async {
-    final homeViewModel = ref.read(homeViewModelProvider.notifier);
     final homeState = ref.read(homeViewModelProvider);
 
     // 选择目标：已拍摄且未传输的场景
-    final targets = homeState.scenes.where((s) => s.capturedImage != null && !s.isTransferred).toList();
+    final targets = homeState.scenes
+        .where((s) => s.capturedImage != null && !s.isTransferred)
+        .toList();
     if (targets.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -942,6 +564,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
 
     if (confirmed != true) return;
+    if (!context.mounted) return;
 
     // 进度对话框 + 异步循环，逐一上传并刷新进度
     int completed = 0;
@@ -958,45 +581,20 @@ class _HomePageState extends ConsumerState<HomePage> {
               started = true;
               // 在首帧后启动上传循环，避免阻塞构建
               WidgetsBinding.instance.addPostFrameCallback((_) async {
-                final wifiService = ref.read(wifiServiceProvider);
-                for (final scene in targets) {
-                  try {
-                    final result = await wifiService.uploadImageFromCamera(
-                      scene.capturedImage!,
-                      sceneId: scene.id,
-                    );
-                    if (result != null) {
-                      // 构建完整图片URL（如果后端返回相对路径）
-                      final wifiSvc = ref.read(wifiServiceProvider);
-                      final String imageId = (result['imageId']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString());
-                      final String relativePath = (result['path']?.toString() ?? result['accessPath']?.toString() ?? '');
-                      String fullUrl = relativePath;
-                      if (relativePath.isNotEmpty) {
-                        final String base = wifiSvc.serverAddress; // 不包含 /api
-                        final String normalizedRel = relativePath.startsWith('/') ? relativePath : '/$relativePath';
-                        final String normalizedBase = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-                        fullUrl = '$normalizedBase$normalizedRel';
-                      }
-
-                      final newRecord = InspectionRecord(
-                        id: imageId,
-                        sceneName: scene.name,
-                        imagePath: fullUrl.isNotEmpty ? fullUrl : scene.capturedImage!,
-                        timestamp: DateTime.now(),
-                        status: '已上传',
-                      );
-                      await homeViewModel.addInspectionRecord(newRecord);
-                      await homeViewModel.updateSceneTransferStatus(scene.id, true);
-
-                      completed++;
-                    } else {
-                      failed++;
+                final summary = await _workflow(ref).transferScenes(
+                  targets,
+                  onProgress: (progress) {
+                    completed = progress.completed;
+                    failed = progress.failed;
+                    if (!dialogCtx.mounted) {
+                      return;
                     }
-                  } catch (e) {
-                    failed++;
-                  }
-                  setState(() {}); // 刷新进度条
-                }
+                    setState(() {}); // 刷新进度条
+                  },
+                );
+
+                completed = summary.completed;
+                failed = summary.failed;
 
                 // 关闭进度对话框并提示结果
                 if (dialogCtx.mounted) {
@@ -1006,14 +604,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('全部传输完成：成功 $completed，失败 $failed'),
-                      backgroundColor: failed == 0 ? AppTheme.successColor : AppTheme.warningColor,
+                      backgroundColor: failed == 0
+                          ? AppTheme.successColor
+                          : AppTheme.warningColor,
                     ),
                   );
                 }
               });
             }
 
-            final progress = targets.isEmpty ? 0.0 : (completed / targets.length);
+            final progress = targets.isEmpty
+                ? 0.0
+                : (completed / targets.length);
             return AlertDialog(
               title: const Text('正在全部传输'),
               content: Column(
@@ -1021,7 +623,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 children: [
                   LinearProgressIndicator(value: progress),
                   const SizedBox(height: 12),
-                  Text('进度：$completed/${targets.length}')
+                  Text('进度：$completed/${targets.length}'),
                 ],
               ),
             );
@@ -1032,15 +634,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _handleSync(bool isWiredMode) async {
-    // 先检测当前是否可与服务器通信（在线/离线）
-    final wifiService = ref.read(wifiServiceProvider);
-    bool isOnline = false;
-    try {
-      isOnline = await wifiService.testConnection();
-    } catch (_) {
-      isOnline = false;
-    }
-
     if (!mounted) return;
 
     // 弹出进度对话框
@@ -1048,41 +641,19 @@ class _HomePageState extends ConsumerState<HomePage> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: Text(isOnline ? '正在与服务器同步' : '离线刷新'),
+        title: const Text('正在同步数据'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const CircularProgressIndicator(),
             const SizedBox(height: 12),
-            Text(isOnline
-                ? '正在通过${isWiredMode ? "有线" : "无线"}连接从服务器拉取最新场景与检测记录...'
-                : '当前离线，仅刷新本地缓存数据'),
+            Text('正在通过${isWiredMode ? "有线" : "无线"}连接尝试拉取最新场景与检测记录...'),
           ],
         ),
       ),
     );
 
-    bool success = true;
-    String? errorMessage;
-    try {
-      final homeVM = ref.read(homeViewModelProvider.notifier);
-      await homeVM.refreshData(forceOffline: !isOnline).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          throw Exception('请求超时，请检查网络或服务器状态');
-        },
-      );
-      
-      ref.invalidate(styleImagesForSelectedSceneProvider);
-      ref.invalidate(referenceImageUrlProvider);
-    } catch (e) {
-      success = false;
-      errorMessage = e.toString();
-      if (errorMessage!.startsWith('Exception: ')) {
-        errorMessage = errorMessage!.substring(11);
-      }
-      ref.read(loggerProvider).e('同步失败: $e');
-    }
+    final result = await _workflow(ref).syncData();
 
     if (!mounted) return;
 
@@ -1090,13 +661,17 @@ class _HomePageState extends ConsumerState<HomePage> {
     Navigator.of(context).pop();
 
     // 显示 SnackBar
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(success 
-          ? (isOnline ? '同步完成：已与服务器通信并更新数据' : '离线刷新完成：已更新本地缓存数据')
-          : '同步失败：${errorMessage ?? '未知错误'}'),
-      backgroundColor: success 
-          ? (isOnline ? AppTheme.successColor : AppTheme.warningColor)
-          : AppTheme.errorColor,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.success
+              ? (result.isOnline ? '同步完成：已与服务器通信并更新数据' : '离线刷新完成：已更新本地缓存数据')
+              : '同步失败：${result.errorMessage ?? '未知错误'}',
+        ),
+        backgroundColor: result.success
+            ? (result.isOnline ? AppTheme.successColor : AppTheme.warningColor)
+            : AppTheme.errorColor,
+      ),
+    );
   }
 }

@@ -8,14 +8,14 @@ import 'package:device_info_plus/device_info_plus.dart';
 
 class CameraService {
   final Logger _logger;
-  
+
   CameraService(this._logger);
 
   /// 检查并请求相机权限
   Future<bool> requestCameraPermission() async {
     try {
       final status = await Permission.camera.request();
-      
+
       if (status.isGranted) {
         _logger.i('相机权限已授予');
         return true;
@@ -26,7 +26,7 @@ class CameraService {
         _logger.e('相机权限被永久拒绝，需要引导用户到设置页面');
         return false;
       }
-      
+
       return false;
     } catch (e, stackTrace) {
       _logger.e('请求相机权限失败', error: e, stackTrace: stackTrace);
@@ -99,7 +99,8 @@ class CameraService {
   }
 
   /// 保存图片到应用目录
-  Future<String> saveImageToAppDirectory(String imagePath, {
+  Future<String> saveImageToAppDirectory(
+    String imagePath, {
     required String folderName,
     String? customFileName,
   }) async {
@@ -113,7 +114,8 @@ class CameraService {
       }
 
       // 生成文件名
-      final fileName = customFileName ??
+      final fileName =
+          customFileName ??
           '${DateTime.now().millisecondsSinceEpoch}${path.extension(imagePath)}';
       final targetPath = path.join(targetDir.path, fileName);
 
@@ -130,7 +132,8 @@ class CameraService {
   }
 
   /// 保存图片到共享目录（用于与桌面应用同步）
-  Future<String> saveImageToSharedDirectory(String imagePath, {
+  Future<String> saveImageToSharedDirectory(
+    String imagePath, {
     String? customFileName,
   }) async {
     try {
@@ -164,11 +167,11 @@ class CameraService {
       }
 
       // 第三选择：使用应用文档目录
-      if (baseDir == null) {
-        baseDir = await getApplicationDocumentsDirectory();
-      }
+      baseDir ??= await getApplicationDocumentsDirectory();
 
-      final sharedDir = Directory(path.join(baseDir.path, 'ForeignScan', 'shared'));
+      final sharedDir = Directory(
+        path.join(baseDir.path, 'ForeignScan', 'shared'),
+      );
 
       // 创建目录（如果不存在）
       if (!await sharedDir.exists()) {
@@ -177,7 +180,8 @@ class CameraService {
 
       // 生成文件名
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = customFileName ??
+      final fileName =
+          customFileName ??
           'foreignscan_$timestamp${path.extension(imagePath)}';
       final targetPath = path.join(sharedDir.path, fileName);
 
@@ -194,17 +198,18 @@ class CameraService {
   }
 
   /// 压缩图片（如果需要）
-  Future<File> compressImageIfNeeded(File imageFile, {
+  Future<File> compressImageIfNeeded(
+    File imageFile, {
     int maxSizeBytes = 5 * 1024 * 1024, // 5MB
   }) async {
     try {
       final fileSize = await imageFile.length();
-      
+
       if (fileSize <= maxSizeBytes) {
         _logger.d('图片大小合适，无需压缩: ${(fileSize / 1024).toStringAsFixed(2)}KB');
         return imageFile;
       }
-      
+
       // 这里可以集成图片压缩逻辑
       _logger.i('图片需要压缩: ${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB');
       return imageFile;
@@ -218,24 +223,24 @@ class CameraService {
   Future<bool> validateImageFile(String imagePath) async {
     try {
       final file = File(imagePath);
-      
+
       if (!await file.exists()) {
         _logger.e('图片文件不存在: $imagePath');
         return false;
       }
-      
+
       final fileSize = await file.length();
       if (fileSize == 0) {
         _logger.e('图片文件为空: $imagePath');
         return false;
       }
-      
+
       const maxSize = 10 * 1024 * 1024; // 10MB
       if (fileSize > maxSize) {
         _logger.e('图片文件过大: ${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB');
         return false;
       }
-      
+
       _logger.d('图片文件验证通过: $imagePath');
       return true;
     } catch (e) {
@@ -251,7 +256,7 @@ class CameraService {
       final fileSize = await file.length();
       final fileName = path.basename(imagePath);
       final extension = path.extension(imagePath).toLowerCase();
-      
+
       return {
         'path': imagePath,
         'name': fileName,
@@ -272,7 +277,7 @@ class CameraService {
     try {
       final tempDir = await getTemporaryDirectory();
       final tempFiles = tempDir.listSync();
-      
+
       int deletedCount = 0;
       for (final file in tempFiles) {
         if (file is File) {
@@ -283,7 +288,7 @@ class CameraService {
           }
         }
       }
-      
+
       _logger.i('清理临时图片完成: 删除 $deletedCount 个文件');
     } catch (e, stackTrace) {
       _logger.e('清理临时图片失败', error: e, stackTrace: stackTrace);

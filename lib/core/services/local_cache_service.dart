@@ -23,8 +23,8 @@ class LocalCacheService {
   /// 确保将指定URL的图片缓存到本地，并返回本地文件路径
   /// 参数说明：
   /// - url: 网络图片的完整URL（必须是 http/https）
-  /// - subdir: 本地子目录，例如 'style_images/<sceneId>' 或 'records'
-  /// - filename: 目标文件名，例如 '<styleId>_<origName>.jpg' 或 'record_<id>.jpg'
+  /// - subdir: 本地子目录，例如 `style_images/<sceneId>` 或 `records`
+  /// - filename: 目标文件名，例如 `<styleId>_<origName>.jpg` 或 `record_<id>.jpg`
   /// 返回：成功时返回本地文件绝对路径；失败或不需要缓存时返回 null
   Future<String?> ensureCachedImage({
     required String url,
@@ -32,15 +32,19 @@ class LocalCacheService {
     required String filename,
   }) async {
     // 1) 参数校验：仅处理 http/https URL；本地路径不参与下载
-    if (url.isEmpty || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+    if (url.isEmpty ||
+        (!url.startsWith('http://') && !url.startsWith('https://'))) {
       return null;
     }
 
     try {
       // 2) 计算目标保存路径（提前返回策略：若已存在则直接返回）
-      final String targetPath = await _buildLocalPath(subdir: subdir, filename: filename);
+      final String targetPath = await _buildLocalPath(
+        subdir: subdir,
+        filename: filename,
+      );
       final file = File(targetPath);
-      if (file.existsSync()) {
+      if (await file.exists()) {
         return targetPath; // 已缓存，直接返回
       }
 
@@ -50,7 +54,10 @@ class LocalCacheService {
       // 4) 下载并写入文件（避免多层嵌套，逐步返回）
       final response = await _dio.get<List<int>>(
         url,
-        options: Options(responseType: ResponseType.bytes, followRedirects: true),
+        options: Options(
+          responseType: ResponseType.bytes,
+          followRedirects: true,
+        ),
       );
       final bytes = response.data;
       if (bytes == null || bytes.isEmpty) {
@@ -79,17 +86,25 @@ class LocalCacheService {
     for (final r in records) {
       final imagePath = getImagePath(r);
       // 1) 非网络图片或空路径：保持原样
-      if (imagePath.isEmpty || (!imagePath.startsWith('http://') && !imagePath.startsWith('https://'))) {
+      if (imagePath.isEmpty ||
+          (!imagePath.startsWith('http://') &&
+              !imagePath.startsWith('https://'))) {
         out.add(r);
         continue;
       }
 
       // 2) 构建目标文件名（record_<idOrKey>.<ext>），默认使用 .jpg 扩展名
-      final String idOrKey = getIdOrKey(r).isEmpty ? DateTime.now().millisecondsSinceEpoch.toString() : getIdOrKey(r);
+      final String idOrKey = getIdOrKey(r).isEmpty
+          ? DateTime.now().millisecondsSinceEpoch.toString()
+          : getIdOrKey(r);
       final String ext = _inferExtensionFromUrl(imagePath);
-      final String filename = 'record_${idOrKey}$ext';
+      final String filename = 'record_$idOrKey$ext';
 
-      final local = await ensureCachedImage(url: imagePath, subdir: 'records', filename: filename);
+      final local = await ensureCachedImage(
+        url: imagePath,
+        subdir: 'records',
+        filename: filename,
+      );
       out.add(local != null ? copyWithImagePath(r, local) : r);
     }
     return out;
@@ -108,16 +123,24 @@ class LocalCacheService {
   }
 
   /// 计算本地文件完整路径（Documents/subdir/filename）
-  Future<String> _buildLocalPath({required String subdir, required String filename}) async {
+  Future<String> _buildLocalPath({
+    required String subdir,
+    required String filename,
+  }) async {
     final dir = await getApplicationDocumentsDirectory();
     final safeSubdir = subdir.trim().isEmpty ? '' : subdir.trim();
-    final safeFilename = filename.trim().isEmpty ? 'image_${DateTime.now().millisecondsSinceEpoch}.jpg' : filename.trim();
+    final safeFilename = filename.trim().isEmpty
+        ? 'image_${DateTime.now().millisecondsSinceEpoch}.jpg'
+        : filename.trim();
     return p.join(dir.path, safeSubdir, safeFilename);
   }
 
   /// 帮助方法：根据 subdir+filename 返回本地路径（不检查存在性）
   /// 适用于调用方希望先行判断文件是否已缓存
-  Future<String> buildLocalPath({required String subdir, required String filename}) async {
+  Future<String> buildLocalPath({
+    required String subdir,
+    required String filename,
+  }) async {
     return _buildLocalPath(subdir: subdir, filename: filename);
   }
 

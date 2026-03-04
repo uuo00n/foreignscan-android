@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
-import 'package:foreignscan/config/app_config.dart';
 import 'package:foreignscan/models/style_image.dart';
 
 // Provider：样式图服务
@@ -33,7 +32,9 @@ class StyleImageService {
 
       if (data is Map && data['styleImages'] is List) {
         final List items = data['styleImages'];
-        final images = items.map((e) => StyleImage.fromJson(e as Map<String, dynamic>)).toList();
+        final images = items
+            .map((e) => StyleImage.fromJson(e as Map<String, dynamic>))
+            .toList();
         // 成功拉取后写入本地缓存，便于离线展示
         try {
           final prefs = await _prefs;

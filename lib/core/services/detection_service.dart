@@ -19,7 +19,9 @@ final detectionServiceProvider = Provider<DetectionService>((ref) {
   );
 });
 
-final detectionResultsProvider = FutureProvider<List<DetectionResult>>((ref) async {
+final detectionResultsProvider = FutureProvider<List<DetectionResult>>((
+  ref,
+) async {
   final service = ref.read(detectionServiceProvider);
   return await service.getDetectionResults();
 });
@@ -33,7 +35,13 @@ class DetectionService {
   final LocalCacheService _cache;
   final SceneService _sceneService;
 
-  DetectionService(this._logger, this._dio, this._prefs, this._cache, this._sceneService);
+  DetectionService(
+    this._logger,
+    this._dio,
+    this._prefs,
+    this._cache,
+    this._sceneService,
+  );
 
   static const String _detectionsKey = 'detection_results_cache';
   static const String _detectionDetailsKey = 'detection_details_map_cache';
@@ -65,23 +73,32 @@ class DetectionService {
         // 中文注释：后端 detections 结构与前端模型不一致，这里进行适配映射
         final id = (json['id']?.toString() ?? '');
         final createdAt = json['createdAt']?.toString();
-        final timestamp = createdAt != null ? DateTime.tryParse(createdAt) ?? DateTime.now() : DateTime.now();
+        final timestamp = createdAt != null
+            ? DateTime.tryParse(createdAt) ?? DateTime.now()
+            : DateTime.now();
         final items = (json['items'] as List?) ?? const [];
 
         // 图片URL优先使用 processedPath（服务端已绘制框），否则使用 sourcePath
-        String rel = (json['processedPath']?.toString() ?? json['sourcePath']?.toString() ?? '').trim();
+        String rel =
+            (json['processedPath']?.toString() ??
+                    json['sourcePath']?.toString() ??
+                    '')
+                .trim();
         rel = rel.replaceAll('\\', '/');
-        final rootBase = _dio.options.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
-        final imageUrl = rel.isNotEmpty
-            ? _joinUrl(rootBase, rel)
-            : '';
+        final rootBase = _dio.options.baseUrl.replaceFirst(
+          RegExp(r'/api/?$'),
+          '',
+        );
+        final imageUrl = rel.isNotEmpty ? _joinUrl(rootBase, rel) : '';
 
         // 将 items 映射为 issues（坐标信息缺少原图尺寸，这里不绘制框，将尺寸设为0，仅用于数量与列表展示）
         final List<DetectionIssue> issues = items.asMap().entries.map((entry) {
           final idx = entry.key;
           final item = entry.value as Map<String, dynamic>;
           final cls = item['class']?.toString() ?? 'unknown';
-          final conf = (item['confidence'] is num) ? (item['confidence'] as num).toDouble() : null;
+          final conf = (item['confidence'] is num)
+              ? (item['confidence'] as num).toDouble()
+              : null;
           return DetectionIssue(
             id: 'item_${id}_$idx',
             type: IssueType.unknown,
@@ -104,7 +121,8 @@ class DetectionService {
           issues: issues,
           status: DetectionStatus.completed,
           detectionType: json['modelName']?.toString(),
-          confidence: (json['summary'] is Map && (json['summary']['avgScore'] is num))
+          confidence:
+              (json['summary'] is Map && (json['summary']['avgScore'] is num))
               ? (json['summary']['avgScore'] as num).toDouble()
               : null,
           metadata: {
@@ -125,7 +143,9 @@ class DetectionService {
   /// 混合本地/网络的检测结果获取：
   /// - 优先尝试网络；失败则回退到本地缓存
   /// - 成功从网络获取后，下载并缓存图片到本地，更新本地缓存JSON
-  Future<List<DetectionResult>> getDetectionResultsHybrid({bool forceNetwork = false}) async {
+  Future<List<DetectionResult>> getDetectionResultsHybrid({
+    bool forceNetwork = false,
+  }) async {
     try {
       // 中文注释：尝试网络获取（forceNetwork仅用于调用方语义表达，失败仍自动回退本地）
       final networkList = await getDetectionResults();
@@ -134,7 +154,9 @@ class DetectionService {
       List<DetectionResult> withScene = networkList;
       try {
         final scenes = await _sceneService.getScenes();
-        final Map<String, String> sceneNameById = {for (final s in scenes) s.id: s.name};
+        final Map<String, String> sceneNameById = {
+          for (final s in scenes) s.id: s.name,
+        };
         withScene = networkList.map((r) {
           final rawSceneId = r.metadata?['sceneId'];
           // 兼容后端不同 sceneId 结构（字符串或 {Hex: "..."}）
@@ -154,7 +176,9 @@ class DetectionService {
         cachedList = await _cache.cacheRecordImages<DetectionResult>(
           records: withScene,
           getImagePath: (r) => r.imagePath,
-          getIdOrKey: (r) => r.id.isNotEmpty ? r.id : r.timestamp.millisecondsSinceEpoch.toString(),
+          getIdOrKey: (r) => r.id.isNotEmpty
+              ? r.id
+              : r.timestamp.millisecondsSinceEpoch.toString(),
           copyWithImagePath: (r, newPath) => r.copyWith(imagePath: newPath),
         );
       } catch (_) {
@@ -231,7 +255,9 @@ class DetectionService {
           for (final it in items) {
             final Map<String, dynamic> item = it as Map<String, dynamic>;
             final bbox = item['bbox'] as Map<String, dynamic>?;
-            final conf = (item['confidence'] is num) ? (item['confidence'] as num).toDouble() : null;
+            final conf = (item['confidence'] is num)
+                ? (item['confidence'] as num).toDouble()
+                : null;
             issues.add(
               DetectionIssue(
                 id: item['id']?.toString() ?? '',
@@ -239,8 +265,12 @@ class DetectionService {
                 description: '检测到对象: ${item['class'] ?? 'unknown'}',
                 x: (bbox?['x'] is num) ? (bbox!['x'] as num).toDouble() : 0,
                 y: (bbox?['y'] is num) ? (bbox!['y'] as num).toDouble() : 0,
-                width: (bbox?['width'] is num) ? (bbox!['width'] as num).toDouble() : 0,
-                height: (bbox?['height'] is num) ? (bbox!['height'] as num).toDouble() : 0,
+                width: (bbox?['width'] is num)
+                    ? (bbox!['width'] as num).toDouble()
+                    : 0,
+                height: (bbox?['height'] is num)
+                    ? (bbox!['height'] as num).toDouble()
+                    : 0,
                 severity: _severityFromConfidence(conf),
                 confidence: conf,
                 metadata: item,
@@ -249,7 +279,9 @@ class DetectionService {
           }
         } else {
           final bbox = json['bbox'] as Map<String, dynamic>?;
-          final conf = (json['confidence'] is num) ? (json['confidence'] as num).toDouble() : null;
+          final conf = (json['confidence'] is num)
+              ? (json['confidence'] as num).toDouble()
+              : null;
           issues.add(
             DetectionIssue(
               id: json['id']?.toString() ?? '',
@@ -257,8 +289,12 @@ class DetectionService {
               description: '检测到对象: ${json['class'] ?? 'unknown'}',
               x: (bbox?['x'] is num) ? (bbox!['x'] as num).toDouble() : 0,
               y: (bbox?['y'] is num) ? (bbox!['y'] as num).toDouble() : 0,
-              width: (bbox?['width'] is num) ? (bbox!['width'] as num).toDouble() : 0,
-              height: (bbox?['height'] is num) ? (bbox!['height'] as num).toDouble() : 0,
+              width: (bbox?['width'] is num)
+                  ? (bbox!['width'] as num).toDouble()
+                  : 0,
+              height: (bbox?['height'] is num)
+                  ? (bbox!['height'] as num).toDouble()
+                  : 0,
               severity: _severityFromConfidence(conf),
               confidence: conf,
               metadata: json,
@@ -299,32 +335,52 @@ class DetectionService {
       list.sort((a, b) {
         final ma = a as Map<String, dynamic>;
         final mb = b as Map<String, dynamic>;
-        final ta = DateTime.tryParse(ma['createdAt']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final tb = DateTime.tryParse(mb['createdAt']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final ta =
+            DateTime.tryParse(ma['createdAt']?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final tb =
+            DateTime.tryParse(mb['createdAt']?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
         return tb.compareTo(ta);
       });
       final json = list.first as Map<String, dynamic>;
 
       final id = (json['id']?.toString() ?? imageId);
       final createdAt = json['createdAt']?.toString();
-      final timestamp = createdAt != null ? DateTime.tryParse(createdAt) ?? DateTime.now() : DateTime.now();
+      final timestamp = createdAt != null
+          ? DateTime.tryParse(createdAt) ?? DateTime.now()
+          : DateTime.now();
       final items = (json['items'] as List?) ?? const [];
-      String rel = (json['processedPath']?.toString() ?? json['sourcePath']?.toString() ?? '').trim().replaceAll('\\', '/');
-      final rootBase = _dio.options.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+      String rel =
+          (json['processedPath']?.toString() ??
+                  json['sourcePath']?.toString() ??
+                  '')
+              .trim()
+              .replaceAll('\\', '/');
+      final rootBase = _dio.options.baseUrl.replaceFirst(
+        RegExp(r'/api/?$'),
+        '',
+      );
       final imageUrl = rel.isNotEmpty ? _joinUrl(rootBase, rel) : '';
 
       final List<DetectionIssue> issues = items.asMap().entries.map((entry) {
         final item = entry.value as Map<String, dynamic>;
         final bbox = item['bbox'] as Map<String, dynamic>?;
-        final conf = (item['confidence'] is num) ? (item['confidence'] as num).toDouble() : null;
+        final conf = (item['confidence'] is num)
+            ? (item['confidence'] as num).toDouble()
+            : null;
         return DetectionIssue(
           id: 'item_${id}_${entry.key}',
           type: IssueType.unknown,
           description: '检测到对象: ${item['class'] ?? 'unknown'}',
           x: (bbox?['x'] is num) ? (bbox!['x'] as num).toDouble() : 0,
           y: (bbox?['y'] is num) ? (bbox!['y'] as num).toDouble() : 0,
-          width: (bbox?['width'] is num) ? (bbox!['width'] as num).toDouble() : 0,
-          height: (bbox?['height'] is num) ? (bbox!['height'] as num).toDouble() : 0,
+          width: (bbox?['width'] is num)
+              ? (bbox!['width'] as num).toDouble()
+              : 0,
+          height: (bbox?['height'] is num)
+              ? (bbox!['height'] as num).toDouble()
+              : 0,
           severity: _severityFromConfidence(conf),
           confidence: conf,
           metadata: item,
@@ -339,7 +395,8 @@ class DetectionService {
         issues: issues,
         status: DetectionStatus.completed,
         detectionType: json['modelName']?.toString(),
-        confidence: (json['summary'] is Map && (json['summary']['avgScore'] is num))
+        confidence:
+            (json['summary'] is Map && (json['summary']['avgScore'] is num))
             ? (json['summary']['avgScore'] as num).toDouble()
             : null,
         metadata: {
@@ -357,7 +414,8 @@ class DetectionService {
       await _cacheDetectionDetail(imageId, result);
 
       // 中文注释：尝试缓存检测结果图片（若为网络图片）
-      if (imageUrl.isNotEmpty && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+      if (imageUrl.isNotEmpty &&
+          (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
         try {
           final localPath = await _cache.ensureCachedImage(
             url: imageUrl,
@@ -384,7 +442,10 @@ class DetectionService {
   }
 
   // 缓存检测详情
-  Future<void> _cacheDetectionDetail(String imageId, DetectionResult result) async {
+  Future<void> _cacheDetectionDetail(
+    String imageId,
+    DetectionResult result,
+  ) async {
     try {
       final prefs = await _prefs;
       final String? jsonStr = prefs.getString(_detectionDetailsKey);
@@ -394,7 +455,7 @@ class DetectionService {
           cacheMap = jsonDecode(jsonStr);
         } catch (_) {}
       }
-      
+
       cacheMap[imageId] = result.toJson();
       await prefs.setString(_detectionDetailsKey, jsonEncode(cacheMap));
     } catch (e) {
@@ -408,7 +469,7 @@ class DetectionService {
       final prefs = await _prefs;
       final String? jsonStr = prefs.getString(_detectionDetailsKey);
       if (jsonStr == null || jsonStr.isEmpty) return null;
-      
+
       final Map<String, dynamic> cacheMap = jsonDecode(jsonStr);
       final data = cacheMap[imageId];
       if (data != null) {
@@ -477,27 +538,6 @@ class DetectionService {
       _logger.e('删除检测结果失败', error: e, stackTrace: stackTrace);
       throw Exception('删除检测结果失败: $e');
     }
-  }
-
-  // 模拟数据生成方法（保留以便离线调试）
-  List<DetectionResult> _generateMockDetectionResults() {
-    return [
-      _generateMockDetectionResult(
-        imagePath: 'assets/mock_detection_image_1.jpg',
-        detectionType: 'scene1',
-        sceneName: '管道闸口',
-      ),
-      _generateMockDetectionResult(
-        imagePath: 'assets/mock_detection_image_2.jpg',
-        detectionType: 'scene2',
-        sceneName: '主承轴区域',
-      ),
-      _generateMockDetectionResult(
-        imagePath: 'assets/mock_detection_image_3.jpg',
-        detectionType: 'scene3',
-        sceneName: '冷却系统出口',
-      ),
-    ];
   }
 
   DetectionResult _generateMockDetectionResult({

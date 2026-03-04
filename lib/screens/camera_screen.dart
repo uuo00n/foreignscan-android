@@ -25,11 +25,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   double _currentZoom = 1.0;
   double _startZoomOnScale = 1.0;
   bool _showZoomSlider = true;
-  Timer? _zoomApplyDebounce;
   Timer? _zoomApplyTicker;
-  bool _isDraggingSlider = false;
   double _lastAppliedZoom = 1.0;
-  
+
   @override
   void initState() {
     super.initState();
@@ -70,14 +68,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   @override
   void dispose() {
     ref.read(cameraControllerProvider.notifier).disposeCamera();
-    _zoomApplyDebounce?.cancel();
     _zoomApplyTicker?.cancel();
     super.dispose();
   }
 
   void _startZoomTicker(CameraController controller) {
     _zoomApplyTicker?.cancel();
-    _zoomApplyTicker = Timer.periodic(const Duration(milliseconds: 80), (_) async {
+    _zoomApplyTicker = Timer.periodic(const Duration(milliseconds: 80), (
+      _,
+    ) async {
       final z = _currentZoom.clamp(_minZoom, _maxZoom);
       if ((z - _lastAppliedZoom).abs() < 0.01) return;
       _lastAppliedZoom = z;
@@ -96,20 +95,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     try {
       // 获取当前相机控制器
       final controller = ref.read(cameraControllerProvider).value;
-      
+
       if (controller != null) {
-        // 拍照前记录当前闪光灯状态
-        final currentFlashMode = _flashMode;
         // 中文注释：
         // 不再在“自动模式”下强行切换到常亮（torch），而是遵循控制器的自动策略：
         // - 如果当前为 FlashMode.auto，保持自动模式，由系统根据环境光决定是否触发闪光
         // - 如果当前为 FlashMode.off 或 FlashMode.torch，按用户选择执行，无需临时切换
-        
+
         // 拍照
         final imagePath = await ref
             .read(cameraControllerProvider.notifier)
             .takePicture();
-            
+
         // 中文注释：
         // 需求变更：拍摄完成后自动关闭闪光灯，避免“常亮（torch）”持续点亮影响使用。
         // 行为说明：无论当前是 auto/torch/off，拍完后都统一设置为 off，UI 同步更新。
@@ -123,7 +120,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
             _flashMode = FlashMode.off;
           });
         }
-        
+
         if (mounted && imagePath != null) {
           // 直接返回拍摄的照片路径
           Navigator.pop(context, imagePath);
@@ -133,7 +130,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         final imagePath = await ref
             .read(cameraControllerProvider.notifier)
             .takePicture();
-            
+
         // 中文注释：
         // 即便读取时控制器为 null，拍照底层仍可能成功，此处尝试关闭闪光灯（若控制器可用）。
         final afterController = ref.read(cameraControllerProvider).value;
@@ -149,7 +146,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
             _flashMode = FlashMode.off;
           });
         }
-        
+
         if (mounted && imagePath != null) {
           Navigator.pop(context, imagePath);
         }
@@ -183,7 +180,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
     // 强制重新初始化相机
     await ref.read(cameraControllerProvider.notifier).switchCamera(nextIndex);
-    
+
     // 如果相机初始化失败，尝试再次切换
     final cameraState = ref.read(cameraControllerProvider);
     if (cameraState is AsyncError) {
@@ -195,7 +192,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
           ),
         );
       }
-      
+
       // 短暂延迟后再次尝试
       await Future.delayed(const Duration(milliseconds: 500));
       await ref.read(cameraControllerProvider.notifier).refreshCamera();
@@ -283,8 +280,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                 behavior: HitTestBehavior.opaque,
                                 onTapDown: (details) async {
                                   final offset = Offset(
-                                    details.localPosition.dx / constraints.maxWidth,
-                                    details.localPosition.dy / constraints.maxHeight,
+                                    details.localPosition.dx /
+                                        constraints.maxWidth,
+                                    details.localPosition.dy /
+                                        constraints.maxHeight,
                                   );
                                   try {
                                     await controller.setFocusPoint(offset);
@@ -293,7 +292,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                     await controller.setExposurePoint(offset);
                                   } catch (_) {}
                                   setState(() {
-                                    _focusIndicatorOffset = details.localPosition;
+                                    _focusIndicatorOffset =
+                                        details.localPosition;
                                     _focusLocked = false;
                                   });
                                 },
@@ -310,10 +310,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                     await controller.setExposurePoint(offset);
                                   } catch (_) {}
                                   try {
-                                    await controller.setFocusMode(FocusMode.locked);
+                                    await controller.setFocusMode(
+                                      FocusMode.locked,
+                                    );
                                   } catch (_) {}
                                   try {
-                                    await controller.setExposureMode(ExposureMode.locked);
+                                    await controller.setExposureMode(
+                                      ExposureMode.locked,
+                                    );
                                   } catch (_) {}
                                   setState(() {
                                     _focusIndicatorOffset = localPos;
@@ -328,8 +332,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                   _startZoomTicker(controller);
                                 },
                                 onScaleUpdate: (details) async {
-                                  final target = (_startZoomOnScale * details.scale)
-                                      .clamp(_minZoom, _maxZoom);
+                                  final target =
+                                      (_startZoomOnScale * details.scale).clamp(
+                                        _minZoom,
+                                        _maxZoom,
+                                      );
                                   final z = target.toDouble();
                                   if ((z - _currentZoom).abs() > 0.001) {
                                     setState(() {
@@ -345,7 +352,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                 onScaleEnd: (_) async {
                                   _stopZoomTicker();
                                   try {
-                                    final finalZoom = _currentZoom.clamp(_minZoom, _maxZoom);
+                                    final finalZoom = _currentZoom.clamp(
+                                      _minZoom,
+                                      _maxZoom,
+                                    );
                                     setState(() {
                                       _currentZoom = finalZoom;
                                     });
@@ -354,59 +364,67 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                 },
                               ),
                               Positioned(
-                                  left: 12,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: SafeArea(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        // 已移除左侧倍数文本展示，改为在拍摄按钮下方统一显示
-                                        Container(
-                                          width: 56,
-                                          height: 280,
-                                          decoration: BoxDecoration(
-                                            color: Colors.black45,
-                                            borderRadius: BorderRadius.circular(24),
+                                left: 12,
+                                top: 0,
+                                bottom: 0,
+                                child: SafeArea(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      // 已移除左侧倍数文本展示，改为在拍摄按钮下方统一显示
+                                      Container(
+                                        width: 56,
+                                        height: 280,
+                                        decoration: BoxDecoration(
+                                          color: Colors.black45,
+                                          borderRadius: BorderRadius.circular(
+                                            24,
                                           ),
-                                          alignment: Alignment.center,
-                                          child: RotatedBox(
-                                            quarterTurns: 3,
-                                            child: SliderTheme(
-                                              data: SliderTheme.of(context).copyWith(
-                                                trackHeight: 6,
-                                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: RotatedBox(
+                                          quarterTurns: 3,
+                                          child: SliderTheme(
+                                            data: SliderTheme.of(context)
+                                                .copyWith(
+                                                  trackHeight: 6,
+                                                  thumbShape:
+                                                      const RoundSliderThumbShape(
+                                                        enabledThumbRadius: 12,
+                                                      ),
+                                                ),
+                                            child: Slider(
+                                              min: _minZoom,
+                                              max: _maxZoom,
+                                              value: _currentZoom.clamp(
+                                                _minZoom,
+                                                _maxZoom,
                                               ),
-                                              child: Slider(
-                                                min: _minZoom,
-                                                max: _maxZoom,
-                                                value: _currentZoom.clamp(_minZoom, _maxZoom),
-                                                onChangeStart: (_) {
-                                                  _isDraggingSlider = true;
-                                                  _startZoomTicker(controller);
-                                                },
-                                                onChanged: (v) {
-                                                  setState(() {
-                                                    _currentZoom = v;
-                                                    _showZoomSlider = true;
-                                                  });
-                                                },
-                                                onChangeEnd: (v) async {
-                                                  _isDraggingSlider = false;
-                                                  _zoomApplyDebounce?.cancel();
-                                                  _stopZoomTicker();
-                                                  try {
-                                                    await controller.setZoomLevel(v);
-                                                  } catch (_) {}
-                                                },
-                                              ),
+                                              onChangeStart: (_) {
+                                                _startZoomTicker(controller);
+                                              },
+                                              onChanged: (v) {
+                                                setState(() {
+                                                  _currentZoom = v;
+                                                  _showZoomSlider = true;
+                                                });
+                                              },
+                                              onChangeEnd: (v) async {
+                                                _stopZoomTicker();
+                                                try {
+                                                  await controller.setZoomLevel(
+                                                    v,
+                                                  );
+                                                } catch (_) {}
+                                              },
                                             ),
                                           ),
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
                                 ),
+                              ),
                               if (_focusIndicatorOffset != null)
                                 Positioned(
                                   left: _focusIndicatorOffset!.dx - 20,
@@ -417,7 +435,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                     builder: (context, scale, child) {
                                       return AnimatedOpacity(
                                         opacity: 0.9,
-                                        duration: const Duration(milliseconds: 300),
+                                        duration: const Duration(
+                                          milliseconds: 300,
+                                        ),
                                         child: Transform.scale(
                                           scale: scale,
                                           child: Container(
@@ -425,7 +445,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                                             height: 44,
                                             decoration: BoxDecoration(
                                               border: Border.all(
-                                                color: _focusLocked ? AppTheme.successColor : Colors.white,
+                                                color: _focusLocked
+                                                    ? AppTheme.successColor
+                                                    : Colors.white,
                                                 width: 2,
                                               ),
                                             ),
@@ -465,37 +487,37 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                             _flashMode == FlashMode.off
                                 ? Icons.flash_off
                                 : (_flashMode == FlashMode.auto
-                                    ? Icons.flash_auto
-                                    : Icons.flash_on),
+                                      ? Icons.flash_auto
+                                      : Icons.flash_on),
                             color: Colors.white,
                             size: 28,
                           ),
                           onPressed: () async {
-                            if (controller != null) {
-                              // 循环切换闪光灯模式
-                              setState(() {
-                                _flashMode = _flashMode == FlashMode.off
-                                    ? FlashMode.auto
-                                    : (_flashMode == FlashMode.auto
+                            // 循环切换闪光灯模式
+                            setState(() {
+                              _flashMode = _flashMode == FlashMode.off
+                                  ? FlashMode.auto
+                                  : (_flashMode == FlashMode.auto
                                         ? FlashMode.torch
                                         : FlashMode.off);
-                              });
-                               
-                              // 应用闪光灯设置
-                              await controller.setFlashMode(_flashMode);
-                            }
+                            });
+
+                            // 应用闪光灯设置
+                            await controller.setFlashMode(_flashMode);
                           },
                           tooltip: '闪光灯控制',
                         ),
                       ),
-                      
+
                       // 拍照按钮
                       FloatingActionButton(
                         onPressed: () async {
                           await _takePicture();
                           final c = ref.read(cameraControllerProvider).value;
                           if (c != null) {
-                            final double logicalMax = _maxZoom < 4.0 ? _maxZoom : 4.0;
+                            final double logicalMax = _maxZoom < 4.0
+                                ? _maxZoom
+                                : 4.0;
                             double next = _currentZoom + 1.0;
                             if (next > logicalMax - 1e-6) {
                               next = 1.0;
@@ -506,7 +528,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                               _currentZoom = next;
                             });
                             try {
-                              await c.setZoomLevel(next.clamp(_minZoom, _maxZoom));
+                              await c.setZoomLevel(
+                                next.clamp(_minZoom, _maxZoom),
+                              );
                             } catch (_) {}
                           }
                         },
@@ -520,7 +544,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                         onTap: () async {
                           final c = ref.read(cameraControllerProvider).value;
                           if (c != null) {
-                            final double logicalMax = _maxZoom < 4.0 ? _maxZoom : 4.0;
+                            final double logicalMax = _maxZoom < 4.0
+                                ? _maxZoom
+                                : 4.0;
                             double next = _currentZoom + 1.0;
                             if (next > logicalMax - 1e-6) {
                               next = 1.0;
@@ -531,7 +557,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                               _currentZoom = next;
                             });
                             try {
-                              await c.setZoomLevel(next.clamp(_minZoom, _maxZoom));
+                              await c.setZoomLevel(
+                                next.clamp(_minZoom, _maxZoom),
+                              );
                             } catch (_) {}
                           }
                         },

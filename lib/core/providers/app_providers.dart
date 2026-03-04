@@ -6,9 +6,12 @@ import 'package:logger/logger.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/services/local_cache_service.dart';
+import 'package:foreignscan/core/services/server_config_service.dart';
 
 // 全局服务提供者
-final sharedPreferencesProvider = FutureProvider<SharedPreferences>((ref) async {
+final sharedPreferencesProvider = FutureProvider<SharedPreferences>((
+  ref,
+) async {
   return await SharedPreferences.getInstance();
 });
 
@@ -36,7 +39,7 @@ final dioProvider = Provider<Dio>((ref) {
       sendTimeout: NetworkConfig.timeout, // 发送超时
     ),
   );
-  
+
   // 添加拦截器
   dio.interceptors.add(
     InterceptorsWrapper(
@@ -44,43 +47,46 @@ final dioProvider = Provider<Dio>((ref) {
         // 添加公共请求头
         options.headers['Content-Type'] = 'application/json';
         options.headers['Accept'] = 'application/json';
-        
+
         // 记录请求日志
-        ref.read(loggerProvider).d(
-          'API Request: ${options.method} ${options.uri}',
-        );
-        
+        ref
+            .read(loggerProvider)
+            .d('API Request: ${options.method} ${options.uri}');
+
         return handler.next(options);
       },
       onResponse: (response, handler) {
         // 记录响应日志
-        ref.read(loggerProvider).d(
-          'API Response: ${response.statusCode} ${response.requestOptions.uri}',
-        );
-        
+        ref
+            .read(loggerProvider)
+            .d(
+              'API Response: ${response.statusCode} ${response.requestOptions.uri}',
+            );
+
         return handler.next(response);
       },
       onError: (error, handler) {
         // 记录错误日志
-        ref.read(loggerProvider).e(
-          'API Error: ${error.message}',
-          error: error,
-          stackTrace: error.stackTrace,
-        );
-        
+        ref
+            .read(loggerProvider)
+            .e(
+              'API Error: ${error.message}',
+              error: error,
+              stackTrace: error.stackTrace,
+            );
+
         return handler.next(error);
       },
     ),
   );
-  
+
   return dio;
 });
-
 
 // 网络连接状态提供者
 final connectivityProvider = StreamProvider<bool>((ref) {
   final connectivity = Connectivity();
-  
+
   return connectivity.onConnectivityChanged.map((results) {
     return !results.contains(ConnectivityResult.none);
   }).asBroadcastStream();
@@ -93,18 +99,31 @@ final isOnlineProvider = Provider<bool>((ref) {
 });
 
 // WiFi通信服务提供者
-final wifiCommunicationServiceProvider = Provider<WiFiCommunicationService>((ref) {
+final wifiServiceProvider = Provider<WiFiCommunicationService>((ref) {
   final svc = WiFiCommunicationService(ref.read(loggerProvider));
   // 中文注释：将当前 Dio 的 baseUrl 解析为 host/port，初始化 WiFi 服务的服务器地址，避免默认值不一致
   try {
     final dio = ref.read(dioProvider);
     final uri = Uri.parse(dio.options.baseUrl);
-    if (uri.host.isNotEmpty && (uri.scheme == 'http' || uri.scheme == 'https')) {
+    if (uri.host.isNotEmpty &&
+        (uri.scheme == 'http' || uri.scheme == 'https')) {
       final port = uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
       svc.setServerAddress(uri.host, port);
     }
   } catch (_) {}
   return svc;
+});
+
+@Deprecated('Use wifiServiceProvider instead.')
+final wifiCommunicationServiceProvider = Provider<WiFiCommunicationService>((
+  ref,
+) {
+  return ref.read(wifiServiceProvider);
+});
+
+// 服务器配置服务提供者（统一读取/保存/应用服务器设置）
+final serverConfigServiceProvider = Provider<ServerConfigService>((ref) {
+  return ServerConfigService(ref.read(sharedPreferencesProvider.future));
 });
 
 // 本地图片缓存服务提供者

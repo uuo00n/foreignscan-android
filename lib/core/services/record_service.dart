@@ -27,7 +27,13 @@ class RecordService {
 
   static const String _recordsKey = 'inspection_records';
 
-  RecordService(this._prefs, this._dio, this._sceneService, this._cache, this._logger);
+  RecordService(
+    this._prefs,
+    this._dio,
+    this._sceneService,
+    this._cache,
+    this._logger,
+  );
 
   /// 获取拍摄记录（优先网络，失败兜底本地缓存）
   /// 说明：
@@ -37,7 +43,7 @@ class RecordService {
   Future<List<InspectionRecord>> getRecords({bool forceOffline = false}) async {
     try {
       List<InspectionRecord> networkRecords = [];
-      
+
       if (!forceOffline) {
         // 1) 并发获取场景列表与图片记录
         final scenesFuture = _sceneService.getScenes(forceOffline: false);
@@ -53,43 +59,50 @@ class RecordService {
           };
 
           final List items = data['images'];
-          networkRecords = items.map((raw) {
-            final m = raw as Map<String, dynamic>;
+          networkRecords = items
+              .map((raw) {
+                final m = raw as Map<String, dynamic>;
 
-            // 提前解析字段，避免多层嵌套，提高可读性
-            final String id = m['id']?.toString() ?? '';
-            final String sceneId = m['sceneId'] is Map && m['sceneId']['Hex'] != null
-                ? m['sceneId']['Hex'].toString()
-                : (m['sceneId']?.toString() ?? '');
-            final String path = m['path']?.toString() ?? '';
-            final String createdAtStr = m['createdAt']?.toString() ?? m['timestamp']?.toString() ?? '';
+                // 提前解析字段，避免多层嵌套，提高可读性
+                final String id = m['id']?.toString() ?? '';
+                final String sceneId =
+                    m['sceneId'] is Map && m['sceneId']['Hex'] != null
+                    ? m['sceneId']['Hex'].toString()
+                    : (m['sceneId']?.toString() ?? '');
+                final String path = m['path']?.toString() ?? '';
+                final String createdAtStr =
+                    m['createdAt']?.toString() ??
+                    m['timestamp']?.toString() ??
+                    '';
 
-            // 构建完整图片URL（当 path 为相对路径或以 ./ 开头时，统一转为 http://host:port/uploads/...）
-            final String fullUrl = _buildFullImageUrl(path);
+                // 构建完整图片URL（当 path 为相对路径或以 ./ 开头时，统一转为 http://host:port/uploads/...）
+                final String fullUrl = _buildFullImageUrl(path);
 
-            // 推断状态：若已检测则显示“已检测”，有缺陷则显示“存在缺陷”，否则“已上传”
-            final bool isDetected = m['isDetected'] == true;
-            final bool hasIssue = m['hasIssue'] == true;
-            final String status = hasIssue
-                ? '存在缺陷'
-                : (isDetected ? '已检测' : '已上传');
+                // 推断状态：若已检测则显示“已检测”，有缺陷则显示“存在缺陷”，否则“已上传”
+                final bool isDetected = m['isDetected'] == true;
+                final bool hasIssue = m['hasIssue'] == true;
+                final String status = hasIssue
+                    ? '存在缺陷'
+                    : (isDetected ? '已检测' : '已上传');
 
-            // 时间解析：尽量使用后端的 createdAt/timestamp，失败则使用当前时间
-            DateTime ts;
-            try {
-              ts = DateTime.parse(createdAtStr);
-            } catch (_) {
-              ts = DateTime.now();
-            }
+                // 时间解析：尽量使用后端的 createdAt/timestamp，失败则使用当前时间
+                DateTime ts;
+                try {
+                  ts = DateTime.parse(createdAtStr);
+                } catch (_) {
+                  ts = DateTime.now();
+                }
 
-            return InspectionRecord(
-              id: id,
-              sceneName: sceneNameById[sceneId] ?? '未知场景',
-              imagePath: fullUrl,
-              timestamp: ts,
-              status: status,
-            );
-          }).toList().cast<InspectionRecord>();
+                return InspectionRecord(
+                  id: id,
+                  sceneName: sceneNameById[sceneId] ?? '未知场景',
+                  imagePath: fullUrl,
+                  timestamp: ts,
+                  status: status,
+                );
+              })
+              .toList()
+              .cast<InspectionRecord>();
         }
       }
 
@@ -115,7 +128,9 @@ class RecordService {
         cachedCombined = await _cache.cacheRecordImages<InspectionRecord>(
           records: combined,
           getImagePath: (r) => r.imagePath,
-          getIdOrKey: (r) => r.id.isNotEmpty ? r.id : r.timestamp.millisecondsSinceEpoch.toString(),
+          getIdOrKey: (r) => r.id.isNotEmpty
+              ? r.id
+              : r.timestamp.millisecondsSinceEpoch.toString(),
           copyWithImagePath: (r, newPath) => r.copyWith(imagePath: newPath),
         );
       } catch (_) {
@@ -175,8 +190,10 @@ class RecordService {
   Future<void> updateRecord(InspectionRecord updatedRecord) async {
     try {
       final records = await getRecords();
-      final index = records.indexWhere((record) => record.id == updatedRecord.id);
-      
+      final index = records.indexWhere(
+        (record) => record.id == updatedRecord.id,
+      );
+
       if (index != -1) {
         records[index] = updatedRecord;
         await saveRecords(records);
@@ -241,7 +258,9 @@ class RecordService {
     if (!relative.startsWith('/')) {
       relative = '/$relative';
     }
-    final normalizedBase = rootBase.endsWith('/') ? rootBase.substring(0, rootBase.length - 1) : rootBase;
+    final normalizedBase = rootBase.endsWith('/')
+        ? rootBase.substring(0, rootBase.length - 1)
+        : rootBase;
     return '$normalizedBase$relative';
   }
 
@@ -255,7 +274,7 @@ class RecordService {
     List<InspectionRecord> localRecords,
     List<InspectionRecord> networkRecords,
   ) {
-    String _keyOf(InspectionRecord r) {
+    String keyOf(InspectionRecord r) {
       if (r.id.isNotEmpty) return r.id;
       return '${r.imagePath}|${r.timestamp.millisecondsSinceEpoch}';
     }
@@ -264,12 +283,12 @@ class RecordService {
 
     // 1) 先放入网络数据（权威信息）
     for (final r in networkRecords) {
-      map[_keyOf(r)] = r;
+      map[keyOf(r)] = r;
     }
 
     // 2) 再补充本地数据（仅当不存在同键时加入）
     for (final r in localRecords) {
-      final key = _keyOf(r);
+      final key = keyOf(r);
       map.putIfAbsent(key, () => r);
     }
 

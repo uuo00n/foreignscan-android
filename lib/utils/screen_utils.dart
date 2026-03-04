@@ -6,14 +6,15 @@ class ScreenUtils {
     _instance ??= ScreenUtils._();
     return _instance!;
   }
-  
+
   ScreenUtils._();
-  
+
   late MediaQueryData _mediaQueryData;
   late double width;
   late double height;
   late double statusBarHeight;
   late double bottomBarHeight;
+  late TextScaler textScaler;
   late double textScaleFactor;
   late Orientation orientation;
 
@@ -23,7 +24,8 @@ class ScreenUtils {
     height = _mediaQueryData.size.height;
     statusBarHeight = _mediaQueryData.padding.top;
     bottomBarHeight = _mediaQueryData.padding.bottom;
-    textScaleFactor = _mediaQueryData.textScaleFactor;
+    textScaler = _mediaQueryData.textScaler;
+    textScaleFactor = textScaler.scale(1.0);
     orientation = _mediaQueryData.orientation;
   }
 
@@ -39,18 +41,18 @@ class ScreenUtils {
 
   /// 根据屏幕宽度适配字体大小
   double setSp(double fontSize) {
-    return fontSize * (this.width / 375.0);
+    return fontSize * (width / 375.0);
   }
 
   /// 获取屏幕比例
   double get scaleWidth => width / 375.0;
-  
+
   /// 获取屏幕高度比例
   double get scaleHeight => height / 812.0;
-  
+
   /// 判断是否为平板
   bool get isTablet => width >= 600;
-  
+
   /// 判断是否为大屏手机
   bool get isLargeScreen => width >= 414; // iPhone Plus and larger
 
@@ -61,14 +63,14 @@ class ScreenUtils {
 /// 便捷的工具类扩展
 extension ScreenExtension on num {
   /// 适配宽度
-  double get w => ScreenUtils.instance.setWidth(this.toDouble());
-  
+  double get w => ScreenUtils.instance.setWidth(toDouble());
+
   /// 适配高度
-  double get h => ScreenUtils.instance.setHeight(this.toDouble());
-  
+  double get h => ScreenUtils.instance.setHeight(toDouble());
+
   /// 适配字体大小
-  double get sp => ScreenUtils.instance.setSp(this.toDouble());
-  
+  double get sp => ScreenUtils.instance.setSp(toDouble());
+
   /// 按比例缩放
-  double get r => this.toDouble() * ScreenUtils.instance.scaleWidth;
+  double get r => toDouble() * ScreenUtils.instance.scaleWidth;
 }

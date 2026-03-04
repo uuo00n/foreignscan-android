@@ -8,11 +8,11 @@ class SceneTile extends StatelessWidget {
   final VoidCallback onTap;
 
   const SceneTile({
-    Key? key,
+    super.key,
     required this.scene,
     required this.isSelected,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -25,14 +25,16 @@ class SceneTile extends StatelessWidget {
             width: isSelected ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(12),
-          color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.05) : AppTheme.surfaceLight,
+          color: isSelected
+              ? AppTheme.primaryColor.withValues(alpha: 0.05)
+              : AppTheme.surfaceLight,
           boxShadow: isSelected
               ? [
                   BoxShadow(
                     color: AppTheme.primaryColor.withValues(alpha: 0.2),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
-                  )
+                  ),
                 ]
               : null,
         ),
@@ -42,13 +44,17 @@ class SceneTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.1) : AppTheme.backgroundLight,
+                color: isSelected
+                    ? AppTheme.primaryColor.withValues(alpha: 0.1)
+                    : AppTheme.backgroundLight,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.videocam_rounded,
                 size: 24,
-                color: isSelected ? AppTheme.primaryColor : AppTheme.textSecondary,
+                color: isSelected
+                    ? AppTheme.primaryColor
+                    : AppTheme.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
@@ -58,7 +64,9 @@ class SceneTile extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? AppTheme.primaryColor : AppTheme.textPrimary,
+                color: isSelected
+                    ? AppTheme.primaryColor
+                    : AppTheme.textPrimary,
               ),
               overflow: TextOverflow.ellipsis, // 名称过长时省略
               maxLines: 1,
@@ -72,7 +80,9 @@ class SceneTile extends StatelessWidget {
                   height: 8,
                   decoration: BoxDecoration(
                     color: (scene.latestStatus == '已检测')
-                        ? ((scene.hasIssue == true) ? AppTheme.errorColor : AppTheme.successColor)
+                        ? ((scene.hasIssue == true)
+                              ? AppTheme.errorColor
+                              : AppTheme.successColor)
                         : AppTheme.warningColor,
                     shape: BoxShape.circle,
                   ),

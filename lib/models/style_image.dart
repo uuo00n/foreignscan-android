@@ -28,7 +28,8 @@ class StyleImage {
     return StyleImage(
       id: json['id']?.toString() ?? '',
       sceneId: (json['sceneId'] is Map && json['sceneId']['Hex'] != null)
-          ? json['sceneId']['Hex'].toString() // 兼容极少数序列化形式
+          ? json['sceneId']['Hex']
+                .toString() // 兼容极少数序列化形式
           : (json['sceneId']?.toString() ?? ''),
       name: json['name']?.toString(),
       description: json['description']?.toString(),
@@ -45,13 +46,15 @@ class StyleImage {
     // 1) 优先使用后端返回的 accessPath（一般形如 /uploads/styles/<scene>/<file>）
     // 2) 若仅返回 path（如 ./uploads/styles/...），则去掉前缀 '.'
     // 3) 兜底：确保相对路径以 '/' 开头，避免拼接成 http://host:portuploads/... 的错误形式
-    String? relative = accessPath ?? (path != null ? path!.replaceFirst(RegExp(r'^\.'), '') : null);
+    String? relative = accessPath ?? path?.replaceFirst(RegExp(r'^\.'), '');
     if (relative == null || relative.isEmpty) return '';
     if (!relative.startsWith('/')) {
       relative = '/$relative';
     }
     // 确保 baseUrl 不以斜杠结尾
-    final String normalizedBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final String normalizedBase = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
     return '$normalizedBase$relative';
   }
 
@@ -71,7 +74,9 @@ class StyleImage {
   // 从JSON字符串列表反序列化（用于本地缓存读取）
   static List<StyleImage> fromJsonList(String jsonString) {
     final List<dynamic> jsonList = jsonDecode(jsonString);
-    return jsonList.map((e) => StyleImage.fromJson(e as Map<String, dynamic>)).toList();
+    return jsonList
+        .map((e) => StyleImage.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // 将JSON Map列表序列化为字符串（用于本地缓存写入）

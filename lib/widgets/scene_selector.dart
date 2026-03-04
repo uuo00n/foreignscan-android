@@ -7,18 +7,20 @@ class SceneSelector extends StatelessWidget {
   final List<SceneData> scenes;
   final int selectedIndex;
   final Function(int) onSceneSelected;
+  final double? panelWidth;
 
   const SceneSelector({
-    Key? key,
+    super.key,
     required this.scenes,
     required this.selectedIndex,
     required this.onSceneSelected,
-  }) : super(key: key);
+    this.panelWidth,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 280,
+      width: panelWidth ?? 280,
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,

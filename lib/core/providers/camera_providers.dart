@@ -9,9 +9,13 @@ final cameraServiceProvider = Provider<CameraService>((ref) {
 });
 
 // 相机控制器提供者
-final cameraControllerProvider = StateNotifierProvider.autoDispose<CameraControllerNotifier, AsyncValue<CameraController?>>((ref) {
-  return CameraControllerNotifier(ref);
-});
+final cameraControllerProvider =
+    StateNotifierProvider.autoDispose<
+      CameraControllerNotifier,
+      AsyncValue<CameraController?>
+    >((ref) {
+      return CameraControllerNotifier(ref);
+    });
 
 // 相机初始化状态提供者
 final cameraInitializationProvider = FutureProvider<bool>((ref) async {
@@ -24,7 +28,9 @@ final cameraInitializationProvider = FutureProvider<bool>((ref) async {
 });
 
 // 可用相机列表提供者
-final availableCamerasProvider = FutureProvider<List<CameraDescription>>((ref) async {
+final availableCamerasProvider = FutureProvider<List<CameraDescription>>((
+  ref,
+) async {
   try {
     return await availableCameras();
   } catch (e) {
@@ -36,7 +42,8 @@ final availableCamerasProvider = FutureProvider<List<CameraDescription>>((ref) a
 final selectedCameraProvider = StateProvider<int>((ref) => 0);
 
 // 相机控制器状态管理器
-class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController?>> {
+class CameraControllerNotifier
+    extends StateNotifier<AsyncValue<CameraController?>> {
   final Ref _ref;
   CameraController? _currentController;
   bool _isInitializing = false;
@@ -49,28 +56,29 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
   Future<void> _initializeCamera() async {
     if (_isInitializing) return;
     final now = DateTime.now();
-    if (_lastInitAt != null && now.difference(_lastInitAt!).inMilliseconds < 1200) {
+    if (_lastInitAt != null &&
+        now.difference(_lastInitAt!).inMilliseconds < 1200) {
       return;
     }
     _isInitializing = true;
     _lastInitAt = now;
     const int maxRetries = 3;
     int retryCount = 0;
-    
+
     try {
       while (retryCount < maxRetries) {
         try {
           state = const AsyncValue.loading();
-          
+
           // 先释放旧的相机资源
           if (_currentController != null) {
             await _currentController!.dispose();
             _currentController = null;
           }
-          
+
           // 添加延迟，确保旧相机资源完全释放
           await Future.delayed(const Duration(milliseconds: 500));
-          
+
           final cameras = await availableCameras();
           if (cameras.isEmpty) {
             state = const AsyncValue.error('没有可用的相机', StackTrace.empty);
@@ -78,8 +86,9 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
           }
 
           final selectedCameraIndex = _ref.read(selectedCameraProvider);
-          final camera = cameras[selectedCameraIndex.clamp(0, cameras.length - 1)];
-          
+          final camera =
+              cameras[selectedCameraIndex.clamp(0, cameras.length - 1)];
+
           _currentController = CameraController(
             camera,
             ResolutionPreset.max,
@@ -98,22 +107,27 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
             );
             initialized = true;
           } catch (initError) {
-            _ref.read(loggerProvider).e('相机初始化失败 (尝试 ${retryCount + 1}/$maxRetries)', error: initError);
+            _ref
+                .read(loggerProvider)
+                .e(
+                  '相机初始化失败 (尝试 ${retryCount + 1}/$maxRetries)',
+                  error: initError,
+                );
             if (_currentController != null) {
               await _currentController!.dispose();
               _currentController = null;
             }
-            
+
             // 如果是最后一次尝试，则抛出错误
             if (retryCount == maxRetries - 1) {
-              throw initError;
+              rethrow;
             }
-            
+
             // 否则继续重试
             retryCount++;
             continue;
           }
-          
+
           if (initialized && _currentController != null) {
             // 中文注释：
             // 初始化完成后，显式设置闪光灯为关闭状态，避免某些设备或插件默认使用自动闪光导致拍照时自动亮灯。
@@ -136,7 +150,7 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
             _isInitializing = false;
             return;
           }
-          
+
           retryCount++;
         }
       }
@@ -156,7 +170,7 @@ class CameraControllerNotifier extends StateNotifier<AsyncValue<CameraController
 
       // 保存新的相机索引
       _ref.read(selectedCameraProvider.notifier).state = cameraIndex;
-      
+
       // 重新初始化相机
       await _initializeCamera();
     } catch (e, stackTrace) {

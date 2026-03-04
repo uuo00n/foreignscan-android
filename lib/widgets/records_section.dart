@@ -14,14 +14,14 @@ class RecordsSection extends StatelessWidget {
   final VoidCallback onNextPage;
 
   const RecordsSection({
-    Key? key,
+    super.key,
     required this.records,
     required this.currentPage,
     required this.recordsPerPage,
     required this.totalPages,
     required this.onPreviousPage,
     required this.onNextPage,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -62,18 +62,28 @@ class RecordsSection extends StatelessWidget {
               ),
               if (records.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.backgroundLight,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.swipe_outlined, size: 14, color: AppTheme.textSecondary),
+                      Icon(
+                        Icons.swipe_outlined,
+                        size: 14,
+                        color: AppTheme.textSecondary,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '左右滑动',
-                        style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -87,11 +97,20 @@ class RecordsSection extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.history, size: 48, color: AppTheme.dividerColor),
+                        Icon(
+                          Icons.history,
+                          size: 48,
+                          color: AppTheme.dividerColor,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           '暂无拍摄记录',
-                          style: TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.5), fontSize: 14),
+                          style: TextStyle(
+                            color: AppTheme.textSecondary.withValues(
+                              alpha: 0.5,
+                            ),
+                            fontSize: 14,
+                          ),
                         ),
                       ],
                     ),
@@ -124,7 +143,10 @@ class RecordsSection extends StatelessWidget {
     final dateFormat = DateFormat('MM-dd HH:mm');
 
     return Container(
-      margin: const EdgeInsets.only(right: 12, bottom: 8), // Added bottom margin for shadow
+      margin: const EdgeInsets.only(
+        right: 12,
+        bottom: 8,
+      ), // Added bottom margin for shadow
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,
         boxShadow: [
@@ -157,7 +179,9 @@ class RecordsSection extends StatelessWidget {
                 child: Container(
                   decoration: const BoxDecoration(
                     color: AppTheme.backgroundLight,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
                   ),
                   child: _buildImage(record.imagePath),
                 ),
@@ -182,12 +206,19 @@ class RecordsSection extends StatelessWidget {
                       ),
                       Row(
                         children: [
-                          Icon(Icons.access_time, size: 12, color: AppTheme.textSecondary),
+                          Icon(
+                            Icons.access_time,
+                            size: 12,
+                            color: AppTheme.textSecondary,
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               dateFormat.format(record.timestamp),
-                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 11,
+                              ),
                               maxLines: 1,
                             ),
                           ),
@@ -207,21 +238,22 @@ class RecordsSection extends StatelessWidget {
 
   // 中文注释：统一状态标签映射与颜色（首页与详情页保持一致）
   Widget _buildStatusChip(String rawStatus) {
+    final statusType = InspectionStatusTypeParser.fromRaw(rawStatus);
     final String label;
     Color bg;
     Color fg;
     IconData icon;
 
-    switch (rawStatus) {
-      case '存在缺陷':
-      case '异常':
+    switch (statusType) {
+      case InspectionStatusType.abnormal:
         label = '异常';
         bg = AppTheme.errorColor.withValues(alpha: 0.1);
         fg = AppTheme.errorColor;
         icon = Icons.warning_amber_rounded;
         break;
-      case '已检测':
-      case '合格':
+      case InspectionStatusType.detected:
+      case InspectionStatusType.qualified:
+      case InspectionStatusType.verified:
         label = '合格';
         bg = AppTheme.successColor.withValues(alpha: 0.1);
         fg = AppTheme.successColor;
@@ -239,7 +271,11 @@ class RecordsSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(6),
-        border: rawStatus == '未检测' ? Border.all(color: AppTheme.dividerColor) : Border.all(color: fg.withValues(alpha: 0.2)),
+        border:
+            statusType == InspectionStatusType.pending ||
+                statusType == InspectionStatusType.unknown
+            ? Border.all(color: AppTheme.dividerColor)
+            : Border.all(color: fg.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -248,7 +284,11 @@ class RecordsSection extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: fg,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
@@ -262,7 +302,8 @@ class RecordsSection extends StatelessWidget {
   ///   2) 本地存在 -> Image.file
   ///   3) 其他 -> 占位图标
   Widget _buildImage(String imagePath) {
-    if (imagePath.isNotEmpty && (imagePath.startsWith('http://') || imagePath.startsWith('https://'))) {
+    if (imagePath.isNotEmpty &&
+        (imagePath.startsWith('http://') || imagePath.startsWith('https://'))) {
       return ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         child: Image.network(
@@ -285,26 +326,24 @@ class RecordsSection extends StatelessWidget {
 
     if (imagePath.isNotEmpty) {
       final file = File(imagePath);
-      if (file.existsSync()) {
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          child: Image.file(
-            file,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            errorBuilder: (context, error, stack) {
-              return Center(
-                child: Icon(
-                  Icons.broken_image_rounded,
-                  size: 32,
-                  color: AppTheme.textSecondary.withValues(alpha: 0.5),
-                ),
-              );
-            },
-          ),
-        );
-      }
+      return ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        child: Image.file(
+          file,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stack) {
+            return Center(
+              child: Icon(
+                Icons.broken_image_rounded,
+                size: 32,
+                color: AppTheme.textSecondary.withValues(alpha: 0.5),
+              ),
+            );
+          },
+        ),
+      );
     }
 
     return Center(

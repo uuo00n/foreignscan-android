@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:foreignscan/core/providers/home_providers.dart' hide loggerProvider;
-import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/providers/app_info_providers.dart';
 import 'package:foreignscan/widgets/about_app_dialog.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
 import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/screens/home/controllers/drawer_settings_controller.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   final Function() onUploadPressed;
   final Function(bool isWiredMode)? onSyncPressed;
-  
+
   const AppDrawer({
-    Key? key,
+    super.key,
     required this.onUploadPressed,
     this.onSyncPressed,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<AppDrawer> createState() => _AppDrawerState();
@@ -24,16 +23,19 @@ class AppDrawer extends ConsumerStatefulWidget {
 class _AppDrawerState extends ConsumerState<AppDrawer> {
   final TextEditingController _ipController = TextEditingController();
   final TextEditingController _portController = TextEditingController();
+  DrawerServerSettings _serverSettings = const DrawerServerSettings();
   bool _isConnecting = false;
   bool _isConnected = false;
   bool _hasTested = false; // 中文注释：是否已进行过“测试连接”，用于控制右侧状态提示的显示
   String? _testStatusText; // 中文注释：测试连接的提示文案（成功/失败/输入缺失等）
   Map<String, dynamic>? _wifiInfo;
-  int _statusVersion = 0; // 中文注释：状态版本号，每次状态变更递增，确保 AnimatedSwitcher 的子组件 Key 唯一，避免重复 Key
+  int _statusVersion =
+      0; // 中文注释：状态版本号，每次状态变更递增，确保 AnimatedSwitcher 的子组件 Key 唯一，避免重复 Key
   bool _isAboutDialogShowing = false; // 中文注释：标记“关于”对话框是否正在显示，防止重复点击导致多次弹窗
-  bool _isWiredMode = false; // 中文注释：是否为有线模式（USB连接）
-  String _lastWirelessIp = ''; // 中文注释：保存切换到有线模式前的无线IP，以便切换回无线模式时恢复
-  String _lastWiredIp = ''; // 中文注释：保存切换到无线模式前的有线IP，以便切换回有线模式时恢复
+
+  DrawerSettingsController _settingsController(WidgetRef ref) {
+    return DrawerSettingsController(ref);
+  }
 
   @override
   void initState() {
@@ -50,9 +52,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   }
 
   Future<void> _loadWifiInfo() async {
-    final wifiService = ref.read(wifiServiceProvider);
-    final wifiInfo = await wifiService.getWiFiInfo();
-    
+    final wifiInfo = await _settingsController(ref).loadWifiInfo();
+
     if (mounted) {
       setState(() {
         _wifiInfo = wifiInfo;
@@ -64,79 +65,33 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     // 中文注释：防并发与防抖，若当前已在连接测试中，直接返回，避免多次快速点击导致并发和动画堆叠
     if (_isConnecting) return;
 
-    // 中文注释：
-    // 当未填写IP或端口时，不再通过首页SnackBar提示，而是在按钮旁边显示文字与图标提示。
-    if (_ipController.text.isEmpty || _portController.text.isEmpty) {
-      setState(() {
-        _isConnecting = false;
-        _isConnected = false;
-        _hasTested = true;
-        _testStatusText = '请输入服务器IP和端口';
-        _statusVersion++; // 中文注释：递增版本，确保相同提示的连续出现也有不同的 Key
-      });
-      return;
-    }
-
     // 中文注释：立即标记为连接中，阻止再次点击。
     setState(() {
       _isConnecting = true;
     });
 
-    // 读取输入并进行基本校验
-    final ip = _ipController.text.trim();
-    final port = int.tryParse(_portController.text.trim()) ?? 3000;
+    final result = await _settingsController(ref).testConnectionAndPersist(
+      ipInput: _ipController.text,
+      portInput: _portController.text,
+      isWiredMode: _serverSettings.isWiredMode,
+    );
 
-    // 更新 WiFi 服务的目标地址（用于非 REST 上传与测试）
-    final wifiService = ref.read(wifiServiceProvider);
-    wifiService.setServerAddress(ip, port);
-
-    final isConnected = await wifiService.testConnection();
     // 中文注释：若在等待过程中当前 Drawer 已被关闭或组件已卸载，避免对已卸载组件 setState
     if (!mounted) return;
 
     setState(() {
       _isConnecting = false;
-      _isConnected = isConnected;
+      _isConnected = result.isConnected;
       _hasTested = true;
-      // 中文注释：
-      // 为避免状态提示文字过长导致溢出，这里使用更短的文案。
-      _testStatusText = isConnected
-          ? '连接成功'
-          : '连接失败，请检查IP与端口';
+      _testStatusText = result.message;
       _statusVersion++; // 中文注释：每次结果更新递增版本，避免 AnimatedSwitcher 在快速重复状态下的重复 Key
     });
+  }
 
-    if (isConnected) {
-      // 成功后，动态更新全局 Dio 的 baseUrl，以便样式图等 REST 接口使用最新地址
-      // 例如：http://<ip>:<port>/api
-      final dio = ref.read(dioProvider);
-      final newApiBaseUrl = 'http://$ip:$port/api';
-      dio.options.baseUrl = newApiBaseUrl; // 动态切换到新地址
-
-      // 中文注释：持久化服务器设置，确保重启后仍使用最新地址
-      try {
-        final prefs = await ref.read(sharedPreferencesProvider.future);
-        // 保存当前连接成功的IP到通用字段，兼容旧逻辑
-        await prefs.setString('server_ip', ip);
-        await prefs.setInt('server_port', port);
-        
-        // 保存当前模式
-        await prefs.setBool('is_wired_mode', _isWiredMode);
-        
-        // 分别保存对应模式的IP，实现独立记忆
-        if (_isWiredMode) {
-          await prefs.setString('wired_server_ip', ip);
-        } else {
-          await prefs.setString('wireless_server_ip', ip);
-        }
-      } catch (e) {
-        ref.read(loggerProvider).w('持久化服务器设置失败: $e');
-      }
-
-      // 使样式图 Provider 失效并重新拉取，立刻刷新参考图
-      ref.invalidate(styleImagesForSelectedSceneProvider);
-      // 中文注释：不再使用SnackBar提示，将状态反馈改为按钮旁的文字+图标提示（见UI部分）
-    }
+  void _resetConnectionStatus() {
+    _isConnected = false;
+    _hasTested = false;
+    _testStatusText = null;
   }
 
   @override
@@ -146,9 +101,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
-            decoration: const BoxDecoration(
-              gradient: AppTheme.primaryGradient,
-            ),
+            decoration: const BoxDecoration(gradient: AppTheme.primaryGradient),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -162,20 +115,23 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 ),
                 const SizedBox(height: 8),
                 // 中文注释：版本号动态展示（优先使用 PackageInfo；加载中或错误时使用兜底值）
-                Builder(builder: (context) {
-                  final infoAsync = ref.watch(simpleAppInfoProvider);
-                  final versionText = infoAsync.maybeWhen(
-                    data: (info) => '版本: ${info.version} (build ${info.buildNumber})',
-                    orElse: () => '版本: 1.0.0',
-                  );
-                  return Text(
-                    versionText,
-                    style: TextStyle(
-                      color: AppTheme.textInverse.withValues(alpha: 0.8),
-                      fontSize: 14,
-                    ),
-                  );
-                }),
+                Builder(
+                  builder: (context) {
+                    final infoAsync = ref.watch(simpleAppInfoProvider);
+                    final versionText = infoAsync.maybeWhen(
+                      data: (info) =>
+                          '版本: ${info.version} (build ${info.buildNumber})',
+                      orElse: () => '版本: 1.0.0',
+                    );
+                    return Text(
+                      versionText,
+                      style: TextStyle(
+                        color: AppTheme.textInverse.withValues(alpha: 0.8),
+                        fontSize: 14,
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -188,7 +144,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             collapsedTextColor: AppTheme.textPrimary,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 8.0,
+                ),
                 child: _wifiInfo == null
                     ? const Center(child: CircularProgressIndicator())
                     : Column(
@@ -225,20 +184,20 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                         Expanded(
                           child: ChoiceChip(
                             label: const Center(child: Text('无线模式')),
-                            selected: !_isWiredMode,
+                            selected: !_serverSettings.isWiredMode,
                             onSelected: (selected) {
-                              if (selected && _isWiredMode) {
-                                setState(() {
-                                  // 切换到无线模式前，保存当前的有线IP
-                                  _lastWiredIp = _ipController.text;
-                                  
-                                  _isWiredMode = false;
-                                  _ipController.text = _lastWirelessIp;
-                                  // 重置连接状态
-                                  _isConnected = false;
-                                  _hasTested = false;
-                                });
+                              if (!selected || !_serverSettings.isWiredMode) {
+                                return;
                               }
+                              setState(() {
+                                _serverSettings = _settingsController(ref)
+                                    .switchToWireless(
+                                      current: _serverSettings,
+                                      currentIp: _ipController.text,
+                                    );
+                                _ipController.text = _serverSettings.ip;
+                                _resetConnectionStatus();
+                              });
                             },
                           ),
                         ),
@@ -246,22 +205,20 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                         Expanded(
                           child: ChoiceChip(
                             label: const Center(child: Text('有线模式')),
-                            selected: _isWiredMode,
+                            selected: _serverSettings.isWiredMode,
                             onSelected: (selected) {
-                              if (selected && !_isWiredMode) {
-                                setState(() {
-                                  // 切换到有线模式前，保存当前的无线IP
-                                  _lastWirelessIp = _ipController.text;
-                                  
-                                  _isWiredMode = true;
-                                  // 恢复之前保存的有线IP
-                                  _ipController.text = _lastWiredIp;
-                                  
-                                  // 重置连接状态
-                                  _isConnected = false;
-                                  _hasTested = false;
-                                });
+                              if (!selected || _serverSettings.isWiredMode) {
+                                return;
                               }
+                              setState(() {
+                                _serverSettings = _settingsController(ref)
+                                    .switchToWired(
+                                      current: _serverSettings,
+                                      currentIp: _ipController.text,
+                                    );
+                                _ipController.text = _serverSettings.ip;
+                                _resetConnectionStatus();
+                              });
                             },
                           ),
                         ),
@@ -316,12 +273,18 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                     // 中文注释：连接中状态使用常量 Key 即可，因已通过 _isConnecting 防并发
                                     key: const ValueKey('connecting'),
                                     children: const [
-                                      Icon(Icons.wifi, color: AppTheme.primaryColor, size: 18),
+                                      Icon(
+                                        Icons.wifi,
+                                        color: AppTheme.primaryColor,
+                                        size: 18,
+                                      ),
                                       SizedBox(width: 6),
                                       Expanded(
                                         child: Text(
                                           '正在连接...',
-                                          style: TextStyle(color: AppTheme.primaryColor),
+                                          style: TextStyle(
+                                            color: AppTheme.primaryColor,
+                                          ),
                                           overflow: TextOverflow.ellipsis,
                                           maxLines: 1,
                                         ),
@@ -329,34 +292,43 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                     ],
                                   )
                                 : (_hasTested
-                                    ? Row(
-                                        // 中文注释：使用状态+版本组合生成唯一 Key，
-                                        // 即使连续出现相同状态（例如连续成功），也不会产生重复 Key。
-                                        key: ValueKey('tested_${_isConnected ? 'success' : 'fail'}_$_statusVersion'),
-                                        children: [
-                                          Icon(
-                                            _isConnected
-                                                ? Icons.check_circle
-                                                : Icons.error_outline,
-                                            color: _isConnected ? AppTheme.successColor : AppTheme.errorColor,
-                                            size: 18,
+                                      ? Row(
+                                          // 中文注释：使用状态+版本组合生成唯一 Key，
+                                          // 即使连续出现相同状态（例如连续成功），也不会产生重复 Key。
+                                          key: ValueKey(
+                                            'tested_${_isConnected ? 'success' : 'fail'}_$_statusVersion',
                                           ),
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              _testStatusText ?? (_isConnected ? '连接成功' : '连接失败'),
-                                              style: TextStyle(
-                                                color: _isConnected ? AppTheme.successColor : AppTheme.errorColor,
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                              maxLines: 1,
+                                          children: [
+                                            Icon(
+                                              _isConnected
+                                                  ? Icons.check_circle
+                                                  : Icons.error_outline,
+                                              color: _isConnected
+                                                  ? AppTheme.successColor
+                                                  : AppTheme.errorColor,
+                                              size: 18,
                                             ),
-                                          ),
-                                        ],
-                                      )
-                                    : const SizedBox.shrink()),
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                _testStatusText ??
+                                                    (_isConnected
+                                                        ? '连接成功'
+                                                        : '连接失败'),
+                                                style: TextStyle(
+                                                  color: _isConnected
+                                                      ? AppTheme.successColor
+                                                      : AppTheme.errorColor,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                                maxLines: 1,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : const SizedBox.shrink()),
                           ),
                         ),
                       ],
@@ -374,7 +346,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             onTap: () {
               // 关闭抽屉并触发同步回调
               Navigator.pop(context);
-              widget.onSyncPressed?.call(_isWiredMode);
+              widget.onSyncPressed?.call(_serverSettings.isWiredMode);
             },
           ),
           const Divider(),
@@ -382,8 +354,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             leading: const Icon(Icons.settings, color: AppTheme.primaryColor),
             title: const Text('设置'),
             onTap: () {
-              // TODO: 导航到设置页面
               Navigator.pop(context);
+              AppRouter.navigateToSettings();
             },
           ),
           ListTile(
@@ -422,69 +394,13 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   }
 
   Future<void> _initServerSettings() async {
-    try {
-      final prefs = await ref.read(sharedPreferencesProvider.future);
-      
-      // 读取分别存储的IP
-      final savedWirelessIp = prefs.getString('wireless_server_ip');
-      final savedWiredIp = prefs.getString('wired_server_ip');
-      // 读取上次的模式
-      final isWiredMode = prefs.getBool('is_wired_mode') ?? false;
-      
-      // 读取通用配置（兼容旧数据或作为当前生效配置）
-      final savedIp = prefs.getString('server_ip');
-      final savedPort = prefs.getInt('server_port');
+    final settings = await _settingsController(ref).loadServerSettings();
+    if (!mounted) return;
 
-      // 初始化缓存变量
-      if (savedWirelessIp != null && savedWirelessIp.isNotEmpty) {
-        _lastWirelessIp = savedWirelessIp;
-      } else if (!isWiredMode && savedIp != null) {
-        // 如果没有专门的无线IP记录，但当前是无线模式且有通用IP，则认为是无线IP
-        _lastWirelessIp = savedIp;
-      }
-
-      if (savedWiredIp != null && savedWiredIp.isNotEmpty) {
-        _lastWiredIp = savedWiredIp;
-      } else if (isWiredMode && savedIp != null) {
-        // 如果没有专门的有线IP记录，但当前是有线模式且有通用IP，则认为是有线IP
-        _lastWiredIp = savedIp;
-      } else {
-        // 默认为空
-        _lastWiredIp = '';
-      }
-
-      if (savedIp != null && savedIp.isNotEmpty && savedPort != null) {
-        // 恢复模式状态
-        _isWiredMode = isWiredMode;
-        
-        // 根据恢复的模式设置输入框内容
-        if (_isWiredMode) {
-          _ipController.text = _lastWiredIp;
-        } else {
-          _ipController.text = _lastWirelessIp;
-        }
-        
-        _portController.text = savedPort.toString();
-        
-        // 中文注释：仅当存在已保存的服务器配置时，初始化 WiFi 服务与 Dio 地址
-        final ip = _ipController.text.trim();
-        if (ip.isNotEmpty) {
-          final port = int.tryParse(_portController.text.trim()) ?? 3000;
-          final wifiService = ref.read(wifiServiceProvider);
-          wifiService.setServerAddress(ip, port);
-          final dio = ref.read(dioProvider);
-          dio.options.baseUrl = 'http://$ip:$port/api';
-        }
-      } else {
-        // 中文注释：无已保存配置时，不使用默认地址，留空等待用户手动配置
-        _ipController.text = '';
-        _portController.text = '';
-      }
-    } catch (e) {
-      ref.read(loggerProvider).w('读取服务器设置失败: $e');
-      // 中文注释：读取失败时同样不填充默认地址，避免误用
-      _ipController.text = '';
-      _portController.text = '';
-    }
+    setState(() {
+      _serverSettings = settings;
+      _ipController.text = settings.ip;
+      _portController.text = settings.portText;
+    });
   }
 }

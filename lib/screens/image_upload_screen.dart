@@ -1,15 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
-import 'package:camera/camera.dart';
-import 'package:foreignscan/core/providers/camera_providers.dart' as camera_providers;
+import 'package:foreignscan/core/providers/camera_providers.dart'
+    as camera_providers;
 import 'package:foreignscan/core/theme/app_theme.dart';
 
 class ImageUploadScreen extends ConsumerStatefulWidget {
   final String? imagePath;
-  
+
   const ImageUploadScreen({super.key, this.imagePath});
 
   @override
@@ -17,29 +16,33 @@ class ImageUploadScreen extends ConsumerStatefulWidget {
 }
 
 class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
-  final TextEditingController _serverIpController = TextEditingController(text: '192.168.1.100');
-  final TextEditingController _portController = TextEditingController(text: '8080');
+  final TextEditingController _serverIpController = TextEditingController(
+    text: '192.168.1.100',
+  );
+  final TextEditingController _portController = TextEditingController(
+    text: '8080',
+  );
   bool _isUploading = false;
   String? _uploadStatus;
   String? _uploadedImageUrl;
-  
+
   @override
   void initState() {
     super.initState();
     _checkWifiInfo();
   }
-  
+
   @override
   void dispose() {
     _serverIpController.dispose();
     _portController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _checkWifiInfo() async {
-    final wifiService = WiFiCommunicationService(ref.read(loggerProvider));
+    final wifiService = ref.read(wifiServiceProvider);
     final wifiInfo = await wifiService.getWiFiInfo();
-    
+
     if (wifiInfo != null) {
       setState(() {
         _uploadStatus = '已连接到WiFi: ${wifiInfo['ssid'] ?? '未知'}';
@@ -50,7 +53,7 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
       });
     }
   }
-  
+
   Future<void> _uploadImage() async {
     if (widget.imagePath == null) {
       setState(() {
@@ -58,25 +61,25 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
       });
       return;
     }
-    
+
     setState(() {
       _isUploading = true;
       _uploadStatus = '正在上传图片...';
     });
-    
+
     try {
-      final wifiService = WiFiCommunicationService(ref.read(loggerProvider));
+      final wifiService = ref.read(wifiServiceProvider);
       wifiService.setServerAddress(
-        _serverIpController.text, 
-        int.tryParse(_portController.text) ?? 8080
+        _serverIpController.text,
+        int.tryParse(_portController.text) ?? 8080,
       );
-      
+
       // 在单独的上传页面，我们不知道具体的场景ID，使用"upload"作为标识
       final result = await wifiService.uploadImageFromCamera(
         widget.imagePath!,
         sceneId: "upload",
       );
-      
+
       if (result != null && result['success'] == true) {
         setState(() {
           _isUploading = false;
@@ -96,14 +99,16 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
       });
     }
   }
-  
+
   Future<void> _takePicture() async {
-    final cameraController = ref.read(camera_providers.cameraControllerProvider.notifier);
+    final cameraController = ref.read(
+      camera_providers.cameraControllerProvider.notifier,
+    );
     try {
       final imagePath = await cameraController.takePicture();
       if (imagePath != null) {
         if (!mounted) return;
-        
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -112,9 +117,10 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('拍照失败: $e')),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('拍照失败: $e')));
     }
   }
 
@@ -123,9 +129,7 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
     return Scaffold(
       appBar: AppBar(
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: AppTheme.primaryGradient,
-          ),
+          decoration: const BoxDecoration(gradient: AppTheme.primaryGradient),
         ),
         title: const Text('图片上传'),
       ),
@@ -141,7 +145,10 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('WiFi状态', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      'WiFi状态',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 8),
                     Text(_uploadStatus ?? '正在检查WiFi连接...'),
                     const SizedBox(height: 8),
@@ -153,9 +160,9 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // 服务器设置
             Card(
               child: Padding(
@@ -163,7 +170,10 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('服务器设置', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      '服务器设置',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _serverIpController,
@@ -185,9 +195,9 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // 图片预览
             if (widget.imagePath != null)
               Card(
@@ -196,7 +206,10 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('图片预览', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text(
+                        '图片预览',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(height: 16),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8.0),
@@ -218,7 +231,10 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('没有图片', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text(
+                        '没有图片',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(height: 16),
                       Center(
                         child: ElevatedButton.icon(
@@ -231,9 +247,9 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                   ),
                 ),
               ),
-            
+
             const SizedBox(height: 16),
-            
+
             // 上传按钮
             if (widget.imagePath != null)
               ElevatedButton(
@@ -245,9 +261,9 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                     ? const CircularProgressIndicator()
                     : const Text('上传图片到服务器'),
               ),
-            
+
             const SizedBox(height: 16),
-            
+
             // 上传结果
             if (_uploadedImageUrl != null)
               Card(
@@ -256,7 +272,13 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('上传成功', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.successColor)),
+                      const Text(
+                        '上传成功',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.successColor,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Text('图片URL: $_uploadedImageUrl'),
                       const SizedBox(height: 16),

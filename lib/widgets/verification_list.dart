@@ -9,10 +9,7 @@ import 'package:foreignscan/screens/fullscreen_image_page.dart';
 class VerificationList extends StatelessWidget {
   final List<VerificationRecord> records;
 
-  const VerificationList({
-    Key? key,
-    required this.records,
-  }) : super(key: key);
+  const VerificationList({super.key, required this.records});
 
   @override
   Widget build(BuildContext context) {
@@ -147,9 +144,8 @@ class VerificationList extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => FullscreenImagePage(
-                      imageUrl: record.imagePath,
-                    ),
+                    builder: (_) =>
+                        FullscreenImagePage(imageUrl: record.imagePath),
                   ),
                 );
               },
@@ -166,30 +162,19 @@ class VerificationList extends StatelessWidget {
   }
 
   Widget _buildImage(String path, {BoxFit fit = BoxFit.cover}) {
-    final bool isNetwork = path.startsWith('http://') || path.startsWith('https://');
+    final bool isNetwork =
+        path.startsWith('http://') || path.startsWith('https://');
     final Widget error = Container(
       color: AppTheme.backgroundLight,
       child: Center(
-        child: Icon(
-          Icons.broken_image,
-          size: 28,
-          color: AppTheme.warningColor,
-        ),
+        child: Icon(Icons.broken_image, size: 28, color: AppTheme.warningColor),
       ),
     );
     if (isNetwork) {
-      return Image.network(
-        path,
-        fit: fit,
-        errorBuilder: (_, __, ___) => error,
-      );
+      return Image.network(path, fit: fit, errorBuilder: (_, __, ___) => error);
     } else {
       final file = File(path);
-      return Image.file(
-        file,
-        fit: fit,
-        errorBuilder: (_, __, ___) => error,
-      );
+      return Image.file(file, fit: fit, errorBuilder: (_, __, ___) => error);
     }
   }
 
