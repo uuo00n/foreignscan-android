@@ -6,6 +6,7 @@ import 'package:logger/logger.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/services/local_cache_service.dart';
+import 'package:foreignscan/core/services/orb_ffi_service.dart';
 import 'package:foreignscan/core/services/server_config_service.dart';
 
 // 全局服务提供者
@@ -129,4 +130,9 @@ final serverConfigServiceProvider = Provider<ServerConfigService>((ref) {
 // 本地图片缓存服务提供者
 final localCacheServiceProvider = Provider<LocalCacheService>((ref) {
   return LocalCacheService(ref.read(dioProvider));
+});
+
+// ORB 原生匹配服务提供者（通过 Dart FFI 调用 Android C++ OpenCV 动态库）
+final orbFfiServiceProvider = Provider<OrbFfiService>((ref) {
+  return OrbFfiService();
 });

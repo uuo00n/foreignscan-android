@@ -14,6 +14,25 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
+// 读取 local.properties，支持通过 opencv.sdk 指定 OpenCV Android SDK 路径
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties()
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+
+val openCvSdkPath =
+    localProperties.getProperty("opencv.sdk")
+        ?: "${rootProject.projectDir.absolutePath}/third_party/OpenCV-android-sdk/sdk"
+val openCvSdkDir = file(openCvSdkPath)
+if (!openCvSdkDir.exists()) {
+    throw GradleException(
+        "OpenCV SDK not found at: $openCvSdkPath. " +
+            "Please set opencv.sdk in android/local.properties " +
+            "or place SDK under android/third_party/OpenCV-android-sdk/sdk",
+    )
+}
+
 android {
     namespace = "com.dnui.huangjunbo.foreignscan"
     compileSdk = flutter.compileSdkVersion
@@ -37,6 +56,20 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17"
+                cppFlags += "-O3"
+                arguments += "-DOpenCV_DIR=$openCvSdkPath/native/jni"
+            }
+        }
+
+        ndk {
+            abiFilters += "arm64-v8a"
+            abiFilters += "armeabi-v7a"
+            abiFilters += "x86_64"
+        }
     }
 
     // 签名配置：若存在 key.properties 则使用 release 签名，否则使用 debug 签名
@@ -59,6 +92,18 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+        }
+    }
+
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("$openCvSdkPath/native/libs", "src/main/jniLibs")
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
         }
     }
 }

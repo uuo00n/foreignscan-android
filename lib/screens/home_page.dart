@@ -260,28 +260,45 @@ class _HomePageState extends ConsumerState<HomePage> {
       context: context,
       barrierDismissible: false,
       builder: (context) => const AlertDialog(
-        title: Text('正在上传'),
+        title: Text('正在校验并上传'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('正在通过WiFi上传图片，请稍候...'),
+            Text('正在进行场景一致性校验并上传图片，请稍候...'),
           ],
         ),
       ),
     );
 
-    final success = await _workflow(ref).uploadSceneImage(selectedScene);
+    final result = await _workflow(ref).uploadSceneImage(selectedScene);
     if (!context.mounted) {
       return;
     }
 
     Navigator.pop(context); // 关闭进度对话框
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _buildTransferSuccessMessage(result, successLabel: '图片上传成功'),
+          ),
+          backgroundColor: AppTheme.successColor,
+        ),
+      );
+      return;
+    }
+
+    if (_isSimilarityFailure(result)) {
+      await _showSimilarityFailedDialog(context, ref, result);
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(success ? '图片上传成功' : '图片上传失败，请检查网络连接和服务器设置'),
-        backgroundColor: success ? AppTheme.successColor : AppTheme.errorColor,
+        content: Text(result.errorMessage ?? '图片上传失败，请检查网络连接和服务器设置'),
+        backgroundColor: AppTheme.errorColor,
       ),
     );
   }
@@ -450,7 +467,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
 
-    if (selectedScene.capturedImage == null) {
+    if (selectedScene.capturedImage == null ||
+        selectedScene.capturedImage!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('请先拍摄该场景'),
@@ -490,13 +508,13 @@ class _HomePageState extends ConsumerState<HomePage> {
       context: context,
       barrierDismissible: false,
       builder: (context) => const AlertDialog(
-        title: Text('正在传输'),
+        title: Text('正在校验并传输'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('正在通过WiFi传输图片，请稍候...'),
+            Text('正在进行场景一致性校验并传输图片，请稍候...'),
           ],
         ),
       ),
@@ -508,14 +526,76 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     Navigator.pop(context); // 关闭进度对话框
+    if (_isSimilarityFailure(result)) {
+      await _showSimilarityFailedDialog(context, ref, result);
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          result.success ? '传输成功' : (result.errorMessage ?? '传输失败'),
+          result.success
+              ? _buildTransferSuccessMessage(result, successLabel: '传输成功')
+              : (result.errorMessage ?? '传输失败'),
         ),
         backgroundColor: result.success
             ? AppTheme.successColor
             : AppTheme.errorColor,
+      ),
+    );
+  }
+
+  bool _isSimilarityFailure(SceneTransferResult result) {
+    return result.failureType == SceneTransferFailureType.similarityTooLow;
+  }
+
+  String _buildTransferSuccessMessage(
+    SceneTransferResult result, {
+    required String successLabel,
+  }) {
+    final similarity = result.similarity;
+    if (similarity == null) {
+      return successLabel;
+    }
+    final styleId = similarity.bestStyleImageId ?? '未知';
+    final scoreText = similarity.bestScore.toStringAsFixed(3);
+    return '$successLabel（模板ID: $styleId，分数: $scoreText）';
+  }
+
+  Future<void> _showSimilarityFailedDialog(
+    BuildContext context,
+    WidgetRef ref,
+    SceneTransferResult result,
+  ) async {
+    final similarity = result.similarity;
+    final styleId = similarity?.bestStyleImageId ?? '未知';
+    final scoreText = similarity?.bestScore.toStringAsFixed(3) ?? '0.000';
+    final thresholdText = HomeWorkflowController.similarityThreshold
+        .toStringAsFixed(2);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('场景校验未通过'),
+        content: Text(
+          '当前照片与模板场景相似度过低，请重新拍摄。\n'
+          '最佳模板ID：$styleId\n'
+          '匹配分数：$scoreText\n'
+          '通过阈值：$thresholdText',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _navigateToCamera(context, ref);
+            },
+            child: const Text('重新拍摄'),
+          ),
+        ],
       ),
     );
   }
@@ -531,7 +611,12 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     // 选择目标：已拍摄且未传输的场景
     final targets = homeState.scenes
-        .where((s) => s.capturedImage != null && !s.isTransferred)
+        .where(
+          (s) =>
+              s.capturedImage != null &&
+              s.capturedImage!.isNotEmpty &&
+              !s.isTransferred,
+        )
         .toList();
     if (targets.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
