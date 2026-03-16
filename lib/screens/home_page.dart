@@ -9,6 +9,7 @@ import 'package:foreignscan/core/routes/app_router.dart';
 import 'package:foreignscan/core/widgets/loading_widget.dart';
 import 'package:foreignscan/core/widgets/error_widget.dart';
 import 'package:foreignscan/core/widgets/app_bar_actions.dart';
+import 'package:foreignscan/core/widgets/dialog_safety.dart';
 import 'package:foreignscan/widgets/app_drawer.dart';
 import 'package:foreignscan/screens/home/controllers/home_workflow_controller.dart';
 import 'package:foreignscan/screens/home/widgets/home_main_layout.dart';
@@ -273,51 +274,58 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     // 显示上传进度对话框
+    BuildContext? progressDialogContext;
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        title: Text('正在校验并上传'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('正在进行场景一致性校验并上传图片，请稍候...'),
-          ],
-        ),
-      ),
+      builder: (dialogContext) {
+        progressDialogContext = dialogContext;
+        return const AlertDialog(
+          title: Text('正在校验并上传'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('正在进行场景一致性校验并上传图片，请稍候...'),
+            ],
+          ),
+        );
+      },
     );
 
-    final result = await _workflow(ref).uploadSceneImage(selectedScene);
-    if (!context.mounted) {
-      return;
-    }
+    try {
+      final result = await _workflow(ref).uploadSceneImage(selectedScene);
+      if (!context.mounted) {
+        return;
+      }
 
-    Navigator.pop(context); // 关闭进度对话框
-    if (result.success) {
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _buildTransferSuccessMessage(result, successLabel: '图片上传成功'),
+            ),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+        return;
+      }
+
+      if (_isSimilarityFailure(result)) {
+        await _showSimilarityFailedDialog(context, ref, result);
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            _buildTransferSuccessMessage(result, successLabel: '图片上传成功'),
-          ),
-          backgroundColor: AppTheme.successColor,
+          content: Text(result.errorMessage ?? '图片上传失败，请检查网络连接和服务器设置'),
+          backgroundColor: AppTheme.errorColor,
         ),
       );
-      return;
+    } finally {
+      DialogSafety.popIfMounted(progressDialogContext);
     }
-
-    if (_isSimilarityFailure(result)) {
-      await _showSimilarityFailedDialog(context, ref, result);
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result.errorMessage ?? '图片上传失败，请检查网络连接和服务器设置'),
-        backgroundColor: AppTheme.errorColor,
-      ),
-    );
   }
 
   Widget _buildBody(
@@ -540,21 +548,27 @@ class _HomePageState extends ConsumerState<HomePage> {
     return null;
   }
 
-  void _showCaptureValidationProgressDialog(BuildContext context) {
+  void _showCaptureValidationProgressDialog(
+    BuildContext context,
+    ValueChanged<BuildContext> onDialogReady,
+  ) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        title: Text('正在校验场景'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('正在进行场景一致性比对，请稍候...'),
-          ],
-        ),
-      ),
+      builder: (ctx) {
+        onDialogReady(ctx);
+        return const AlertDialog(
+          title: Text('正在校验场景'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('正在进行场景一致性比对，请稍候...'),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -599,20 +613,23 @@ class _HomePageState extends ConsumerState<HomePage> {
       if (imagePath != null) {
         if (!context.mounted) return;
         var validationDialogShown = false;
+        BuildContext? validationDialogContext;
         SceneTransferResult validationResult;
         try {
-          _showCaptureValidationProgressDialog(context);
+          _showCaptureValidationProgressDialog(context, (dialogCtx) {
+            validationDialogContext = dialogCtx;
+          });
           validationDialogShown = true;
           validationResult = await _workflow(
             ref,
           ).validateCapturedScene(selectedScene, imagePath);
           if (context.mounted && validationDialogShown) {
-            Navigator.of(context).pop(); // 关闭校验进度弹窗
+            DialogSafety.popIfMounted(validationDialogContext);
             validationDialogShown = false;
           }
         } catch (e) {
           if (context.mounted && validationDialogShown) {
-            Navigator.of(context).pop();
+            DialogSafety.popIfMounted(validationDialogContext);
           }
           rethrow;
         }
@@ -725,45 +742,52 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (!context.mounted) return;
 
     // 显示上传进度对话框
+    BuildContext? progressDialogContext;
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        title: Text('正在校验并传输'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('正在进行场景一致性校验并传输图片，请稍候...'),
-          ],
-        ),
-      ),
+      builder: (dialogContext) {
+        progressDialogContext = dialogContext;
+        return const AlertDialog(
+          title: Text('正在校验并传输'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('正在进行场景一致性校验并传输图片，请稍候...'),
+            ],
+          ),
+        );
+      },
     );
 
-    final result = await _workflow(ref).transferScene(selectedScene);
-    if (!context.mounted) {
-      return;
-    }
+    try {
+      final result = await _workflow(ref).transferScene(selectedScene);
+      if (!context.mounted) {
+        return;
+      }
 
-    Navigator.pop(context); // 关闭进度对话框
-    if (_isSimilarityFailure(result)) {
-      await _showSimilarityFailedDialog(context, ref, result);
-      return;
-    }
+      if (_isSimilarityFailure(result)) {
+        await _showSimilarityFailedDialog(context, ref, result);
+        return;
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result.success
-              ? _buildTransferSuccessMessage(result, successLabel: '传输成功')
-              : (result.errorMessage ?? '传输失败'),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.success
+                ? _buildTransferSuccessMessage(result, successLabel: '传输成功')
+                : (result.errorMessage ?? '传输失败'),
+          ),
+          backgroundColor: result.success
+              ? AppTheme.successColor
+              : AppTheme.errorColor,
         ),
-        backgroundColor: result.success
-            ? AppTheme.successColor
-            : AppTheme.errorColor,
-      ),
-    );
+      );
+    } finally {
+      DialogSafety.popIfMounted(progressDialogContext);
+    }
   }
 
   bool _isSimilarityFailure(SceneTransferResult result) {
@@ -853,16 +877,16 @@ class _HomePageState extends ConsumerState<HomePage> {
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: const Text('确认全部传输'),
         content: Text('将对 ${targets.length} 个未传输且已拍摄的场景进行图片传输，是否继续？'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
             child: const Text('取消'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
             child: const Text('确认'),
           ),
         ],
@@ -904,7 +928,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
                 // 关闭进度对话框并提示结果
                 if (dialogCtx.mounted) {
-                  Navigator.of(dialogCtx).pop();
+                  DialogSafety.popIfMounted(dialogCtx);
                 }
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -943,41 +967,51 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (!mounted) return;
 
     // 弹出进度对话框
+    BuildContext? progressDialogContext;
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('正在同步数据'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 12),
-            Text('正在通过${isWiredMode ? "有线" : "无线"}连接尝试拉取最新场景与检测记录...'),
-          ],
-        ),
-      ),
+      builder: (dialogContext) {
+        progressDialogContext = dialogContext;
+        return AlertDialog(
+          title: const Text('正在同步数据'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 12),
+              Text('正在通过${isWiredMode ? "有线" : "无线"}连接尝试拉取最新场景与检测记录...'),
+            ],
+          ),
+        );
+      },
     );
 
-    final result = await _workflow(ref).syncData();
+    try {
+      final result = await _workflow(ref).syncData();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    // 关闭进度对话框
-    Navigator.of(context).pop();
-
-    // 显示 SnackBar
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result.success
-              ? (result.isOnline ? '同步完成：已与服务器通信并更新数据' : '离线刷新完成：已更新本地缓存数据')
-              : '同步失败：${result.errorMessage ?? '未知错误'}',
+      // 显示 SnackBar
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.success
+                ? (result.isOnline ? '同步完成：已与服务器通信并更新数据' : '离线刷新完成：已更新本地缓存数据')
+                : '同步失败：${result.errorMessage ?? '未知错误'}',
+          ),
+          backgroundColor: result.success
+              ? (result.isOnline
+                    ? AppTheme.successColor
+                    : AppTheme.warningColor)
+              : AppTheme.errorColor,
         ),
-        backgroundColor: result.success
-            ? (result.isOnline ? AppTheme.successColor : AppTheme.warningColor)
-            : AppTheme.errorColor,
-      ),
-    );
+      );
+    } finally {
+      final dialogCtx = progressDialogContext;
+      if (dialogCtx != null && dialogCtx.mounted) {
+        DialogSafety.popIfMounted(dialogCtx);
+      }
+    }
   }
 }
