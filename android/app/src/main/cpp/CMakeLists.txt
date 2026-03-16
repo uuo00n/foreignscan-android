@@ -4,7 +4,7 @@ project(orb_matcher)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED core features2d imgproc imgcodecs calib3d)
 
 add_library(orb_matcher SHARED orb_matcher.cpp)
 

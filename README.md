@@ -108,6 +108,12 @@ flutter pub get
 opencv.sdk=/absolute/path/to/OpenCV-android-sdk/sdk
 ```
 
+当前仓库的 OpenCV 管理策略：
+
+- 仅保留平板端 `arm64-v8a` 所需 OpenCV 二进制与 CMake 配置
+- 不保留 OpenCV samples / javadoc / native test binaries
+- 如需升级 OpenCV，请先在本地完整解压 SDK，再按本策略裁剪后提交
+
 4. 运行应用
 
 ```bash
@@ -120,6 +126,24 @@ flutter run
 
 ```bash
 flutter build apk --release
+```
+
+OpenCV 升级/裁剪建议流程（仓库内置 SDK 场景）：
+
+```bash
+# 1) 替换 OpenCV-android-sdk 后执行裁剪
+rm -rf android/third_party/OpenCV-android-sdk/samples
+rm -rf android/third_party/OpenCV-android-sdk/sdk/native/bin
+rm -rf android/third_party/OpenCV-android-sdk/sdk/java
+rm -rf android/third_party/OpenCV-android-sdk/sdk/etc
+rm -rf android/third_party/OpenCV-android-sdk/sdk/native/libs/armeabi-v7a
+rm -rf android/third_party/OpenCV-android-sdk/sdk/native/staticlibs/armeabi-v7a
+rm -rf android/third_party/OpenCV-android-sdk/sdk/native/3rdparty/libs/armeabi-v7a
+rm -rf android/third_party/OpenCV-android-sdk/sdk/native/jni/abi-armeabi-v7a
+rm -f  android/third_party/OpenCV-android-sdk/sdk/native/jni/OpenCV-armeabi-v7a.mk
+
+# 2) 重新构建验证
+flutter build apk --debug
 ```
 
 #### iOS

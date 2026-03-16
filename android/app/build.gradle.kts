@@ -80,14 +80,13 @@ android {
                     cppFlags += "-std=c++17"
                     cppFlags += "-O3"
                     arguments += "-DOpenCV_DIR=$openCvSdkPath/native/jni"
+                    abiFilters += "arm64-v8a"
                 }
             }
         }
 
         ndk {
             abiFilters += "arm64-v8a"
-            abiFilters += "armeabi-v7a"
-            abiFilters += "x86_64"
         }
     }
 
