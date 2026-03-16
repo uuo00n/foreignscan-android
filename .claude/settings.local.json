@@ -4,7 +4,17 @@
       "Bash(grep:*)",
       "Bash(flutter analyze:*)",
       "Bash(flutter pub get:*)",
-      "Bash(flutter clean:*)"
+      "Bash(flutter clean:*)",
+      "Bash(/tmp/opencv_modules_check.txt:*)",
+      "Read(//tmp/**)",
+      "Bash(cd \"/Users/huangjunbo/Desktop/dnui-foreignscan/Source code/foreignscan-android\" && flutter build apk --debug 2>&1)",
+      "Bash(cd \"/Users/huangjunbo/Desktop/dnui-foreignscan/Source code/foreignscan-android\" && dart analyze lib/core/services/orb_ffi_service.dart 2>&1)",
+      "Bash(cd \"/Users/huangjunbo/Desktop/dnui-foreignscan/Source code/foreignscan-android\" && dart analyze lib/screens/home/controllers/home_workflow_controller.dart 2>&1)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(cd:*)",
+      "WebSearch",
+      "WebFetch(domain:pub.dev)"
     ]
   }
 }

@@ -21,15 +21,32 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 
-val openCvSdkPath =
-    localProperties.getProperty("opencv.sdk")
-        ?: "${rootProject.projectDir.absolutePath}/third_party/OpenCV-android-sdk/sdk"
-val openCvSdkDir = file(openCvSdkPath)
-if (!openCvSdkDir.exists()) {
+val configuredOpenCvSdkPath =
+    localProperties.getProperty("opencv.sdk")?.trim()?.takeIf { it.isNotEmpty() }
+
+val openCvSdkCandidates =
+    listOfNotNull(
+        configuredOpenCvSdkPath,
+        "${rootProject.projectDir.absolutePath}/third_party/OpenCV-android-sdk/sdk",
+        "${rootProject.projectDir.parentFile.absolutePath}/third_party/OpenCV-android-sdk/sdk",
+    )
+
+val openCvSdkDir = openCvSdkCandidates.map(::file).firstOrNull { it.exists() }
+val openCvSdkPath = openCvSdkDir?.absolutePath ?: ""
+
+if (configuredOpenCvSdkPath != null && (openCvSdkDir == null || openCvSdkDir.absolutePath != file(configuredOpenCvSdkPath).absolutePath)) {
     throw GradleException(
-        "OpenCV SDK not found at: $openCvSdkPath. " +
-            "Please set opencv.sdk in android/local.properties " +
-            "or place SDK under android/third_party/OpenCV-android-sdk/sdk",
+        "Configured OpenCV SDK not found at: $configuredOpenCvSdkPath. " +
+            "Please fix opencv.sdk in android/local.properties.",
+    )
+}
+
+val openCvEnabled = openCvSdkDir != null
+if (!openCvEnabled) {
+    println(
+        "WARNING: OpenCV SDK not found. Native ORB matching is disabled for this build. " +
+            "Set opencv.sdk in android/local.properties or place SDK under " +
+            "android/third_party/OpenCV-android-sdk/sdk.",
     )
 }
 
@@ -57,11 +74,13 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-                cppFlags += "-O3"
-                arguments += "-DOpenCV_DIR=$openCvSdkPath/native/jni"
+        if (openCvEnabled) {
+            externalNativeBuild {
+                cmake {
+                    cppFlags += "-std=c++17"
+                    cppFlags += "-O3"
+                    arguments += "-DOpenCV_DIR=$openCvSdkPath/native/jni"
+                }
             }
         }
 
@@ -95,15 +114,17 @@ android {
         }
     }
 
-    sourceSets {
-        getByName("main") {
-            jniLibs.srcDirs("$openCvSdkPath/native/libs", "src/main/jniLibs")
+    if (openCvEnabled) {
+        sourceSets {
+            getByName("main") {
+                jniLibs.srcDirs("$openCvSdkPath/native/libs", "src/main/jniLibs")
+            }
         }
-    }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+            }
         }
     }
 }

@@ -133,7 +133,7 @@ Future<ServerSetupResult?> showServerSetupDialog({
                     controller: portController,
                     decoration: InputDecoration(
                       labelText: '端口',
-                      hintText: '例如: 3000',
+                      hintText: '例如: 8080',
                       prefixIcon: const Icon(Icons.numbers_rounded),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -225,7 +225,7 @@ Future<ServerSetupResult?> showServerSetupDialog({
                 children: [
                   Expanded(
                     child: TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         foregroundColor: AppTheme.textSecondary,
@@ -271,7 +271,7 @@ Future<ServerSetupResult?> showServerSetupDialog({
                                   const Duration(milliseconds: 500),
                                 );
                                 if (!dialogContext.mounted) return;
-                                Navigator.of(ctx).pop(
+                                Navigator.of(dialogContext).pop(
                                   ServerSetupResult(
                                     ip: ip,
                                     port: port,
@@ -286,7 +286,7 @@ Future<ServerSetupResult?> showServerSetupDialog({
                               }
                             },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
+                        backgroundColor: Theme.of(dialogContext).primaryColor,
                         foregroundColor: AppTheme.textInverse,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(

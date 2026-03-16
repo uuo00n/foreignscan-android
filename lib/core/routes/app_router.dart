@@ -36,8 +36,8 @@ class AppRouter {
         );
 
       case AppConstants.routeCamera:
-        return MaterialPageRoute(
-          builder: (_) => CameraScreen(),
+        return MaterialPageRoute<String?>(
+          builder: (_) => const CameraScreen(),
           settings: settings,
         );
 
@@ -116,11 +116,11 @@ class AppRouter {
     navigatorKey.currentState?.pushNamed(AppConstants.routeCamera);
   }
 
-  static Future<String?> navigateToCameraForResult() {
-    return navigatorKey.currentState?.pushNamed<String>(
-          AppConstants.routeCamera,
-        ) ??
-        Future.value(null);
+  static Future<String?> navigateToCameraForResult() async {
+    final result =
+        await (navigatorKey.currentState?.pushNamed(AppConstants.routeCamera) ??
+            Future.value(null));
+    return result is String ? result : null;
   }
 
   static void navigateToDetectionResult(DetectionResultArguments arguments) {

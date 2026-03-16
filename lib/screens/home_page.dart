@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/theme/app_theme.dart';
 import 'package:foreignscan/core/providers/home_providers.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
+import 'package:foreignscan/core/providers/camera_providers.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
 import 'package:foreignscan/core/widgets/loading_widget.dart';
 import 'package:foreignscan/core/widgets/error_widget.dart';
@@ -22,6 +23,7 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   bool _hasPromptedSetup = false; // 防止重复弹窗
+  ProviderSubscription<HomeState>? _homeStateSubscription;
 
   HomeWorkflowController _workflow(WidgetRef ref) {
     return HomeWorkflowController(ref);
@@ -30,6 +32,34 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
+    _homeStateSubscription = ref.listenManual<HomeState>(
+      homeViewModelProvider,
+      (previous, next) {
+        final errorMessage = next.errorMessage;
+        if (!mounted || errorMessage == null) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: AppTheme.errorColor,
+              duration: const Duration(seconds: 3),
+              action: SnackBarAction(
+                label: '重试',
+                textColor: AppTheme.textInverse,
+                onPressed: () {
+                  final homeViewModel = ref.read(
+                    homeViewModelProvider.notifier,
+                  );
+                  homeViewModel.clearError();
+                  homeViewModel.refreshData();
+                },
+              ),
+            ),
+          );
+        });
+      },
+    );
     // 中文注释：首帧后检查是否已配置服务器，未配置则弹出设置对话框
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _promptServerSetupIfNeeded();
@@ -37,30 +67,15 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   @override
+  void dispose() {
+    _homeStateSubscription?.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final homeState = ref.watch(homeViewModelProvider);
     final homeViewModel = ref.read(homeViewModelProvider.notifier);
-
-    // 监听错误状态
-    ref.listen(homeViewModelProvider, (previous, next) {
-      if (next.errorMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.errorMessage!),
-            backgroundColor: AppTheme.errorColor,
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: '重试',
-              textColor: AppTheme.textInverse,
-              onPressed: () {
-                homeViewModel.clearError();
-                homeViewModel.refreshData();
-              },
-            ),
-          ),
-        );
-      }
-    });
 
     // 使用WillPopScope处理返回手势
     return PopScope(
@@ -124,6 +139,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     try {
       final serverConfigService = ref.read(serverConfigServiceProvider);
       final config = await serverConfigService.load();
+      if (!mounted) return;
       if (!config.isConfigured) {
         _hasPromptedSetup = true;
         await _showServerSetupDialog(
@@ -139,15 +155,27 @@ class _HomePageState extends ConsumerState<HomePage> {
           wifiService: wifiService,
           config: config,
         );
-
-        // 延迟初始化数据，避免在build过程中触发状态更新
-        Future.microtask(() {
-          ref.read(homeViewModelProvider.notifier).initializeData();
-        });
+        _schedulePostConfigRefresh();
       }
     } catch (e) {
       ref.read(loggerProvider).w('首次启动配置检查失败: $e');
     }
+  }
+
+  void _schedulePostConfigRefresh({bool showSuccess = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.invalidate(styleImagesForSelectedSceneProvider);
+      ref.read(homeViewModelProvider.notifier).initializeData();
+      if (!showSuccess) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('服务器已配置成功'),
+          backgroundColor: AppTheme.successColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    });
   }
 
   // 中文注释：首次安装的服务器设置弹窗
@@ -190,18 +218,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     } catch (e) {
       ref.read(loggerProvider).w('保存服务器配置失败: $e');
     }
-
-    ref.invalidate(styleImagesForSelectedSceneProvider);
-    ref.read(homeViewModelProvider.notifier).initializeData();
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('服务器已配置成功'),
-        backgroundColor: AppTheme.successColor,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    _schedulePostConfigRefresh(showSuccess: true);
   }
 
   // 显示退出确认对话框
@@ -409,6 +426,138 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+  Future<CameraPermissionState> _refreshCameraPermissionState(
+    WidgetRef ref,
+  ) async {
+    final status = await ref
+        .read(cameraServiceProvider)
+        .checkCameraPermissionStatus();
+    final mapped = cameraPermissionStateFromStatus(status);
+    ref.read(cameraPermissionStateProvider.notifier).state = mapped;
+    return mapped;
+  }
+
+  Future<CameraPermissionState> _requestCameraPermission(WidgetRef ref) async {
+    ref.read(cameraPermissionStateProvider.notifier).state =
+        CameraPermissionState.requesting;
+    final status = await ref
+        .read(cameraServiceProvider)
+        .requestCameraPermissionStatus();
+    final mapped = cameraPermissionStateFromStatus(status);
+    ref.read(cameraPermissionStateProvider.notifier).state = mapped;
+    return mapped;
+  }
+
+  Future<bool> _ensureCameraPermissionBeforeCapture(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    var permissionState = ref.read(cameraPermissionStateProvider);
+
+    if (permissionState == CameraPermissionState.unknown ||
+        permissionState == CameraPermissionState.requesting) {
+      permissionState = await _refreshCameraPermissionState(ref);
+    }
+    if (!context.mounted) return false;
+
+    if (permissionState == CameraPermissionState.granted) {
+      return true;
+    }
+
+    if (permissionState == CameraPermissionState.denied) {
+      final shouldRetry = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('需要相机权限'),
+          content: const Text('未授予相机权限，是否重新授权？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('重新授权'),
+            ),
+          ],
+        ),
+      );
+      if (shouldRetry != true || !context.mounted) return false;
+
+      permissionState = await _requestCameraPermission(ref);
+      if (!context.mounted) return false;
+      if (permissionState == CameraPermissionState.granted) {
+        return true;
+      }
+    }
+
+    if (permissionState == CameraPermissionState.permanentlyDenied) {
+      final shouldOpenSettings = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('相机权限已被禁用'),
+          content: const Text('请前往系统设置开启相机权限后再拍照。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('去设置'),
+            ),
+          ],
+        ),
+      );
+      if (shouldOpenSettings == true) {
+        await ref.read(cameraServiceProvider).openCameraPermissionSettings();
+        permissionState = await _refreshCameraPermissionState(ref);
+      }
+    }
+
+    if (!context.mounted) return false;
+    if (permissionState == CameraPermissionState.granted) {
+      return true;
+    }
+
+    final message = permissionState == CameraPermissionState.permanentlyDenied
+        ? '请在系统设置中开启相机权限后再试'
+        : '未获得相机权限，无法拍照';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: AppTheme.warningColor),
+    );
+    return false;
+  }
+
+  int? _findFirstUncapturedBeforeSelected(HomeState homeState) {
+    final selectedIndex = homeState.selectedSceneIndex;
+    for (var i = 0; i < selectedIndex; i++) {
+      final captured = homeState.scenes[i].capturedImage;
+      if (captured == null || captured.isEmpty) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  void _showCaptureValidationProgressDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        title: Text('正在校验场景'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('正在进行场景一致性比对，请稍候...'),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _navigateToCamera(BuildContext context, WidgetRef ref) async {
     final homeState = ref.read(homeViewModelProvider);
     final selectedScene = homeState.selectedScene;
@@ -423,29 +572,101 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
 
+    final blockedIndex = _findFirstUncapturedBeforeSelected(homeState);
+    if (blockedIndex != null) {
+      final blockedScene = homeState.scenes[blockedIndex];
+      ref.read(homeViewModelProvider.notifier).selectScene(blockedIndex);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('请先完成场景「${blockedScene.name}」拍摄并通过校验'),
+          backgroundColor: AppTheme.warningColor,
+        ),
+      );
+      return;
+    }
+
+    final hasPermission = await _ensureCameraPermissionBeforeCapture(
+      context,
+      ref,
+    );
+    if (!hasPermission) return;
+
     try {
       // 使用统一路由系统导航到相机页面
       final imagePath = await AppRouter.navigateToCameraForResult();
 
       // 处理相机返回的结果
       if (imagePath != null) {
+        if (!context.mounted) return;
+        var validationDialogShown = false;
+        SceneTransferResult validationResult;
+        try {
+          _showCaptureValidationProgressDialog(context);
+          validationDialogShown = true;
+          validationResult = await _workflow(
+            ref,
+          ).validateCapturedScene(selectedScene, imagePath);
+          if (context.mounted && validationDialogShown) {
+            Navigator.of(context).pop(); // 关闭校验进度弹窗
+            validationDialogShown = false;
+          }
+        } catch (e) {
+          if (context.mounted && validationDialogShown) {
+            Navigator.of(context).pop();
+          }
+          rethrow;
+        }
+        if (!context.mounted) return;
+
+        if (_isSimilarityFailure(validationResult)) {
+          await _showSimilarityFailedDialog(context, ref, validationResult);
+          return;
+        }
+        if (!validationResult.success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(validationResult.errorMessage ?? '场景校验失败'),
+              backgroundColor: AppTheme.errorColor,
+            ),
+          );
+          return;
+        }
+
         final homeViewModel = ref.read(homeViewModelProvider.notifier);
         await homeViewModel.updateSceneImage(selectedScene.id, imagePath);
 
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('照片拍摄成功'),
-              backgroundColor: AppTheme.successColor,
-            ),
-          );
+        if (!context.mounted) return;
+
+        final latestState = ref.read(homeViewModelProvider);
+        final currentIndex = latestState.scenes.indexWhere(
+          (scene) => scene.id == selectedScene.id,
+        );
+        final hasNext =
+            currentIndex >= 0 && currentIndex < latestState.scenes.length - 1;
+        if (hasNext) {
+          ref
+              .read(homeViewModelProvider.notifier)
+              .selectScene(currentIndex + 1);
         }
+
+        final successLabel = hasNext ? '场景校验通过，已切换到下一场景' : '场景校验通过，可开始传输';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _buildTransferSuccessMessage(
+                validationResult,
+                successLabel: successLabel,
+              ),
+            ),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('相机初始化失败: $e'),
+            content: Text('拍摄流程失败: $e'),
             backgroundColor: AppTheme.errorColor,
           ),
         );

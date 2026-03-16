@@ -12,7 +12,7 @@ class WiFiCommunicationService {
   // 注意：这些默认值仅在用户未配置服务器地址时使用。
   // 实际运行时会通过 setServerAddress() 方法被 SharedPreferences 中用户保存的配置覆盖。
   static const String _defaultServerIP = '172.20.10.3';
-  static const int _defaultPort = 3000;
+  static const int _defaultPort = 8080;
   static const Duration _connectionTimeout = Duration(seconds: 10);
 
   final Logger _logger;
@@ -61,7 +61,7 @@ class WiFiCommunicationService {
       final response = await _dio.get('http://$_serverIP:$_port/ping');
       return response.statusCode == 200;
     } catch (e) {
-      // 增强日志：输出当前尝试连接的地址，便于排查（例如端口是否为3000、IP是否正确）
+      // 增强日志：输出当前尝试连接的地址，便于排查（例如端口是否为8080、IP是否正确）
       _logger.e('Connection test failed: $e, address=http://$_serverIP:$_port');
       return false;
     }

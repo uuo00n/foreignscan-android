@@ -70,7 +70,7 @@ class StyleImageService {
   String buildImageUrl(StyleImage image) {
     // 优化：改为使用当前 Dio 的 baseUrl，而不是静态常量。
     // 这样当用户在“服务器设置”中修改 IP/端口后，图片 URL 会自动匹配最新地址。
-    // 示例：_dio.options.baseUrl = http://192.168.1.100:3000/api => rootBase = http://192.168.1.100:3000
+    // 示例：_dio.options.baseUrl = http://192.168.1.100:8080/api => rootBase = http://192.168.1.100:8080
     final apiBase = _dio.options.baseUrl;
     final rootBase = apiBase.replaceFirst(RegExp(r'/api/?$'), '');
     return image.toFullUrl(rootBase);

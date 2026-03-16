@@ -10,6 +10,7 @@ typedef struct OrbScoreNative {
   int keypoints_a;
   int keypoints_b;
   float similarity;
+  int inlier_count;
 } OrbScoreNative;
 
 int orb_compare_images(const char* captured_path,

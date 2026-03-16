@@ -14,8 +14,8 @@ class CameraScreen extends ConsumerStatefulWidget {
   ConsumerState<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends ConsumerState<CameraScreen> {
-  // 添加闪光灯状态
+class _CameraScreenState extends ConsumerState<CameraScreen>
+    with WidgetsBindingObserver {
   FlashMode _flashMode = FlashMode.off;
   Offset? _focusIndicatorOffset;
   bool _focusLocked = false;
@@ -31,44 +31,93 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   @override
   void initState() {
     super.initState();
-    _checkPermissionsAndInitialize();
+    WidgetsBinding.instance.addObserver(this);
+    _syncPermissionAndInitialize();
   }
 
-  Future<void> _checkPermissionsAndInitialize() async {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final permissionState = ref.read(cameraPermissionStateProvider);
+    final hasPermission = permissionState == CameraPermissionState.granted;
+
+    final controller = ref.read(cameraControllerProvider).value;
+
+    if (state == AppLifecycleState.inactive) {
+      // App 进入 inactive 状态（如权限弹窗、切到后台），释放相机
+      if (hasPermission && controller != null) {
+        ref.read(cameraControllerProvider.notifier).disposeCamera();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      // App 恢复前台：重新检查权限并在授权后初始化相机
+      _zoomInitialized = false;
+      _syncPermissionAndInitialize();
+    }
+  }
+
+  Future<void> _syncPermissionAndInitialize() async {
     try {
-      // 检查相机权限
-      final hasPermission = await ref
+      final status = await ref
           .read(cameraServiceProvider)
-          .requestCameraPermission();
+          .checkCameraPermissionStatus();
 
-      if (!mounted) return; // 检查widget是否已被销毁
+      if (!mounted) return;
 
-      if (!hasPermission) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('需要相机权限才能拍照'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
+      final permissionState = cameraPermissionStateFromStatus(status);
+      ref.read(cameraPermissionStateProvider.notifier).state = permissionState;
+      if (permissionState != CameraPermissionState.granted) {
+        ref
+            .read(cameraErrorProvider.notifier)
+            .state = permissionState == CameraPermissionState.permanentlyDenied
+            ? '相机权限已被永久拒绝，请前往系统设置开启后重试'
+            : '相机权限未授予，请授权后再试';
         return;
       }
 
-      // 初始化相机
-      if (mounted) {
-        ref.read(cameraControllerProvider.notifier).refreshCamera();
-      }
+      ref.read(cameraErrorProvider.notifier).state = null;
+      await ref
+          .read(cameraControllerProvider.notifier)
+          .initializeAfterPermission();
     } catch (e) {
-      debugPrint('初始化相机错误: $e');
+      ref.read(cameraErrorProvider.notifier).state = '初始化相机错误: $e';
+      debugPrint('同步相机权限错误: $e');
     }
+  }
+
+  Future<void> _requestPermissionAndInitialize() async {
+    ref.read(cameraPermissionStateProvider.notifier).state =
+        CameraPermissionState.requesting;
+    final status = await ref
+        .read(cameraServiceProvider)
+        .requestCameraPermissionStatus();
+    if (!mounted) return;
+
+    final permissionState = cameraPermissionStateFromStatus(status);
+    ref.read(cameraPermissionStateProvider.notifier).state = permissionState;
+    if (permissionState == CameraPermissionState.granted) {
+      ref.read(cameraErrorProvider.notifier).state = null;
+      await ref
+          .read(cameraControllerProvider.notifier)
+          .initializeAfterPermission();
+      return;
+    }
+
+    ref
+        .read(cameraErrorProvider.notifier)
+        .state = permissionState == CameraPermissionState.permanentlyDenied
+        ? '相机权限已被永久拒绝，请前往系统设置开启后重试'
+        : '相机权限未授予，请授权后再试';
+  }
+
+  Future<void> _openSettingsAndInitialize() async {
+    await ref.read(cameraServiceProvider).openCameraPermissionSettings();
+    await _syncPermissionAndInitialize();
   }
 
   @override
   void dispose() {
-    ref.read(cameraControllerProvider.notifier).disposeCamera();
+    WidgetsBinding.instance.removeObserver(this);
     _zoomApplyTicker?.cancel();
+    // 让 autoDispose 处理相机释放，不手动调用 disposeCamera
     super.dispose();
   }
 
@@ -199,10 +248,56 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     }
   }
 
+  String _permissionMessage(
+    CameraPermissionState permissionState,
+    String? cameraError,
+  ) {
+    if (cameraError != null && cameraError.isNotEmpty) {
+      return cameraError;
+    }
+    switch (permissionState) {
+      case CameraPermissionState.requesting:
+        return '正在请求相机权限...';
+      case CameraPermissionState.permanentlyDenied:
+        return '相机权限已被永久拒绝，请前往系统设置开启后重试';
+      case CameraPermissionState.denied:
+        return '需要相机权限才能拍照';
+      case CameraPermissionState.unknown:
+        return '尚未获取相机权限状态，请重试';
+      case CameraPermissionState.granted:
+        return '';
+    }
+  }
+
+  Widget _buildPermissionBlockedView(
+    CameraPermissionState permissionState,
+    String? cameraError,
+  ) {
+    if (permissionState == CameraPermissionState.requesting) {
+      return const LoadingWidget(message: '正在请求相机权限...', color: Colors.white);
+    }
+
+    final openSettings =
+        permissionState == CameraPermissionState.permanentlyDenied;
+    return ErrorWidgetCustom(
+      message: _permissionMessage(permissionState, cameraError),
+      onRetry: openSettings
+          ? _openSettingsAndInitialize
+          : _requestPermissionAndInitialize,
+      buttonText: openSettings ? '去设置' : '重新授权',
+      icon: Icons.no_photography,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final permissionState = ref.watch(cameraPermissionStateProvider);
+    final cameraError = ref.watch(cameraErrorProvider);
+    final hasPermission = permissionState == CameraPermissionState.granted;
     final cameraState = ref.watch(cameraControllerProvider);
-    final camerasAsync = ref.watch(availableCamerasProvider);
+    final AsyncValue<List<CameraDescription>> camerasAsync = hasPermission
+        ? ref.watch(availableCamerasProvider)
+        : const AsyncValue.data(<CameraDescription>[]);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -228,383 +323,405 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
           ),
         ],
       ),
-      body: cameraState.when(
-        loading: () =>
-            const LoadingWidget(message: '正在初始化相机...', color: Colors.white),
-        error: (error, stackTrace) => ErrorWidgetCustom(
-          message: '相机初始化失败: $error',
-          onRetry: () =>
-              ref.read(cameraControllerProvider.notifier).refreshCamera(),
-          icon: Icons.camera_alt,
-        ),
-        data: (controller) {
-          if (controller == null) {
-            return ErrorWidgetCustom(
-              message: '无法访问相机设备',
-              onRetry: () =>
-                  ref.read(cameraControllerProvider.notifier).refreshCamera(),
-              icon: Icons.camera_alt,
-            );
-          }
+      body: !hasPermission
+          ? _buildPermissionBlockedView(permissionState, cameraError)
+          : cameraState.when(
+              loading: () => const LoadingWidget(
+                message: '正在初始化相机...',
+                color: Colors.white,
+              ),
+              error: (error, stackTrace) => ErrorWidgetCustom(
+                message: '相机初始化失败: $error',
+                onRetry: () =>
+                    ref.read(cameraControllerProvider.notifier).refreshCamera(),
+                icon: Icons.camera_alt,
+              ),
+              data: (controller) {
+                if (controller == null) {
+                  return ErrorWidgetCustom(
+                    message: '无法访问相机设备',
+                    onRetry: () => ref
+                        .read(cameraControllerProvider.notifier)
+                        .initializeAfterPermission(),
+                    icon: Icons.camera_alt,
+                  );
+                }
 
-          if (!_zoomInitialized) {
-            () async {
-              try {
-                final min = await controller.getMinZoomLevel();
-                final max = await controller.getMaxZoomLevel();
-                setState(() {
-                  _minZoom = min;
-                  _maxZoom = max;
-                  _currentZoom = _minZoom;
-                  _zoomInitialized = true;
-                });
-                await controller.setZoomLevel(_currentZoom);
-              } catch (_) {}
-            }();
-          }
+                if (!_zoomInitialized) {
+                  () async {
+                    try {
+                      final min = await controller.getMinZoomLevel();
+                      final max = await controller.getMaxZoomLevel();
+                      setState(() {
+                        _minZoom = min;
+                        _maxZoom = max;
+                        _currentZoom = _minZoom;
+                        _zoomInitialized = true;
+                      });
+                      await controller.setZoomLevel(_currentZoom);
+                    } catch (_) {}
+                  }();
+                }
 
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: Center(
-                  child: AspectRatio(
-                    aspectRatio: controller.value.aspectRatio,
-                    child: CameraPreview(
-                      controller,
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTapDown: (details) async {
-                                  final offset = Offset(
-                                    details.localPosition.dx /
-                                        constraints.maxWidth,
-                                    details.localPosition.dy /
-                                        constraints.maxHeight,
-                                  );
-                                  try {
-                                    await controller.setFocusPoint(offset);
-                                  } catch (_) {}
-                                  try {
-                                    await controller.setExposurePoint(offset);
-                                  } catch (_) {}
-                                  setState(() {
-                                    _focusIndicatorOffset =
-                                        details.localPosition;
-                                    _focusLocked = false;
-                                  });
-                                },
-                                onLongPressStart: (details) async {
-                                  final localPos = details.localPosition;
-                                  final offset = Offset(
-                                    localPos.dx / constraints.maxWidth,
-                                    localPos.dy / constraints.maxHeight,
-                                  );
-                                  try {
-                                    await controller.setFocusPoint(offset);
-                                  } catch (_) {}
-                                  try {
-                                    await controller.setExposurePoint(offset);
-                                  } catch (_) {}
-                                  try {
-                                    await controller.setFocusMode(
-                                      FocusMode.locked,
-                                    );
-                                  } catch (_) {}
-                                  try {
-                                    await controller.setExposureMode(
-                                      ExposureMode.locked,
-                                    );
-                                  } catch (_) {}
-                                  setState(() {
-                                    _focusIndicatorOffset = localPos;
-                                    _focusLocked = true;
-                                  });
-                                },
-                                onScaleStart: (details) {
-                                  _startZoomOnScale = _currentZoom;
-                                  setState(() {
-                                    _showZoomSlider = true;
-                                  });
-                                  _startZoomTicker(controller);
-                                },
-                                onScaleUpdate: (details) async {
-                                  final target =
-                                      (_startZoomOnScale * details.scale).clamp(
-                                        _minZoom,
-                                        _maxZoom,
-                                      );
-                                  final z = target.toDouble();
-                                  if ((z - _currentZoom).abs() > 0.001) {
-                                    setState(() {
-                                      _currentZoom = z;
-                                    });
-                                  }
-                                  if (!_showZoomSlider) {
-                                    setState(() {
-                                      _showZoomSlider = true;
-                                    });
-                                  }
-                                },
-                                onScaleEnd: (_) async {
-                                  _stopZoomTicker();
-                                  try {
-                                    final finalZoom = _currentZoom.clamp(
-                                      _minZoom,
-                                      _maxZoom,
-                                    );
-                                    setState(() {
-                                      _currentZoom = finalZoom;
-                                    });
-                                    await controller.setZoomLevel(finalZoom);
-                                  } catch (_) {}
-                                },
-                              ),
-                              Positioned(
-                                left: 12,
-                                top: 0,
-                                bottom: 0,
-                                child: SafeArea(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      // 已移除左侧倍数文本展示，改为在拍摄按钮下方统一显示
-                                      Container(
-                                        width: 56,
-                                        height: 280,
-                                        decoration: BoxDecoration(
-                                          color: Colors.black45,
-                                          borderRadius: BorderRadius.circular(
-                                            24,
-                                          ),
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: RotatedBox(
-                                          quarterTurns: 3,
-                                          child: SliderTheme(
-                                            data: SliderTheme.of(context)
-                                                .copyWith(
-                                                  trackHeight: 6,
-                                                  thumbShape:
-                                                      const RoundSliderThumbShape(
-                                                        enabledThumbRadius: 12,
-                                                      ),
-                                                ),
-                                            child: Slider(
-                                              min: _minZoom,
-                                              max: _maxZoom,
-                                              value: _currentZoom.clamp(
-                                                _minZoom,
-                                                _maxZoom,
+                return Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Center(
+                        child: AspectRatio(
+                          aspectRatio: controller.value.aspectRatio,
+                          child: CameraPreview(
+                            controller,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                return Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTapDown: (details) async {
+                                        final offset = Offset(
+                                          details.localPosition.dx /
+                                              constraints.maxWidth,
+                                          details.localPosition.dy /
+                                              constraints.maxHeight,
+                                        );
+                                        try {
+                                          await controller.setFocusPoint(
+                                            offset,
+                                          );
+                                        } catch (_) {}
+                                        try {
+                                          await controller.setExposurePoint(
+                                            offset,
+                                          );
+                                        } catch (_) {}
+                                        setState(() {
+                                          _focusIndicatorOffset =
+                                              details.localPosition;
+                                          _focusLocked = false;
+                                        });
+                                      },
+                                      onLongPressStart: (details) async {
+                                        final localPos = details.localPosition;
+                                        final offset = Offset(
+                                          localPos.dx / constraints.maxWidth,
+                                          localPos.dy / constraints.maxHeight,
+                                        );
+                                        try {
+                                          await controller.setFocusPoint(
+                                            offset,
+                                          );
+                                        } catch (_) {}
+                                        try {
+                                          await controller.setExposurePoint(
+                                            offset,
+                                          );
+                                        } catch (_) {}
+                                        try {
+                                          await controller.setFocusMode(
+                                            FocusMode.locked,
+                                          );
+                                        } catch (_) {}
+                                        try {
+                                          await controller.setExposureMode(
+                                            ExposureMode.locked,
+                                          );
+                                        } catch (_) {}
+                                        setState(() {
+                                          _focusIndicatorOffset = localPos;
+                                          _focusLocked = true;
+                                        });
+                                      },
+                                      onScaleStart: (details) {
+                                        _startZoomOnScale = _currentZoom;
+                                        setState(() {
+                                          _showZoomSlider = true;
+                                        });
+                                        _startZoomTicker(controller);
+                                      },
+                                      onScaleUpdate: (details) async {
+                                        final target =
+                                            (_startZoomOnScale * details.scale)
+                                                .clamp(_minZoom, _maxZoom);
+                                        final z = target.toDouble();
+                                        if ((z - _currentZoom).abs() > 0.001) {
+                                          setState(() {
+                                            _currentZoom = z;
+                                          });
+                                        }
+                                        if (!_showZoomSlider) {
+                                          setState(() {
+                                            _showZoomSlider = true;
+                                          });
+                                        }
+                                      },
+                                      onScaleEnd: (_) async {
+                                        _stopZoomTicker();
+                                        try {
+                                          final finalZoom = _currentZoom.clamp(
+                                            _minZoom,
+                                            _maxZoom,
+                                          );
+                                          setState(() {
+                                            _currentZoom = finalZoom;
+                                          });
+                                          await controller.setZoomLevel(
+                                            finalZoom,
+                                          );
+                                        } catch (_) {}
+                                      },
+                                    ),
+                                    Positioned(
+                                      left: 12,
+                                      top: 0,
+                                      bottom: 0,
+                                      child: SafeArea(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            // 已移除左侧倍数文本展示，改为在拍摄按钮下方统一显示
+                                            Container(
+                                              width: 56,
+                                              height: 280,
+                                              decoration: BoxDecoration(
+                                                color: Colors.black45,
+                                                borderRadius:
+                                                    BorderRadius.circular(24),
                                               ),
-                                              onChangeStart: (_) {
-                                                _startZoomTicker(controller);
-                                              },
-                                              onChanged: (v) {
-                                                setState(() {
-                                                  _currentZoom = v;
-                                                  _showZoomSlider = true;
-                                                });
-                                              },
-                                              onChangeEnd: (v) async {
-                                                _stopZoomTicker();
-                                                try {
-                                                  await controller.setZoomLevel(
-                                                    v,
-                                                  );
-                                                } catch (_) {}
-                                              },
+                                              alignment: Alignment.center,
+                                              child: RotatedBox(
+                                                quarterTurns: 3,
+                                                child: SliderTheme(
+                                                  data: SliderTheme.of(context)
+                                                      .copyWith(
+                                                        trackHeight: 6,
+                                                        thumbShape:
+                                                            const RoundSliderThumbShape(
+                                                              enabledThumbRadius:
+                                                                  12,
+                                                            ),
+                                                      ),
+                                                  child: Slider(
+                                                    min: _minZoom,
+                                                    max: _maxZoom,
+                                                    value: _currentZoom.clamp(
+                                                      _minZoom,
+                                                      _maxZoom,
+                                                    ),
+                                                    onChangeStart: (_) {
+                                                      _startZoomTicker(
+                                                        controller,
+                                                      );
+                                                    },
+                                                    onChanged: (v) {
+                                                      setState(() {
+                                                        _currentZoom = v;
+                                                        _showZoomSlider = true;
+                                                      });
+                                                    },
+                                                    onChangeEnd: (v) async {
+                                                      _stopZoomTicker();
+                                                      try {
+                                                        await controller
+                                                            .setZoomLevel(v);
+                                                      } catch (_) {}
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              if (_focusIndicatorOffset != null)
-                                Positioned(
-                                  left: _focusIndicatorOffset!.dx - 20,
-                                  top: _focusIndicatorOffset!.dy - 20,
-                                  child: TweenAnimationBuilder<double>(
-                                    tween: Tween(begin: 1.2, end: 1.0),
-                                    duration: const Duration(milliseconds: 250),
-                                    builder: (context, scale, child) {
-                                      return AnimatedOpacity(
-                                        opacity: 0.9,
-                                        duration: const Duration(
-                                          milliseconds: 300,
-                                        ),
-                                        child: Transform.scale(
-                                          scale: scale,
-                                          child: Container(
-                                            width: 44,
-                                            height: 44,
-                                            decoration: BoxDecoration(
-                                              border: Border.all(
-                                                color: _focusLocked
-                                                    ? AppTheme.successColor
-                                                    : Colors.white,
-                                                width: 2,
-                                              ),
-                                            ),
+                                    ),
+                                    if (_focusIndicatorOffset != null)
+                                      Positioned(
+                                        left: _focusIndicatorOffset!.dx - 20,
+                                        top: _focusIndicatorOffset!.dy - 20,
+                                        child: TweenAnimationBuilder<double>(
+                                          tween: Tween(begin: 1.2, end: 1.0),
+                                          duration: const Duration(
+                                            milliseconds: 250,
                                           ),
+                                          builder: (context, scale, child) {
+                                            return AnimatedOpacity(
+                                              opacity: 0.9,
+                                              duration: const Duration(
+                                                milliseconds: 300,
+                                              ),
+                                              child: Transform.scale(
+                                                scale: scale,
+                                                child: Container(
+                                                  width: 44,
+                                                  height: 44,
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: _focusLocked
+                                                          ? AppTheme
+                                                                .successColor
+                                                          : Colors.white,
+                                                      width: 2,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
                                         ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // 右侧控制面板
-              Positioned(
-                right: 30,
-                top: 0,
-                bottom: 0,
-                child: SafeArea(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // 闪光灯控制
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 24),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: IconButton(
-                          icon: Icon(
-                            _flashMode == FlashMode.off
-                                ? Icons.flash_off
-                                : (_flashMode == FlashMode.auto
-                                      ? Icons.flash_auto
-                                      : Icons.flash_on),
-                            color: Colors.white,
-                            size: 28,
-                          ),
-                          onPressed: () async {
-                            // 循环切换闪光灯模式
-                            setState(() {
-                              _flashMode = _flashMode == FlashMode.off
-                                  ? FlashMode.auto
-                                  : (_flashMode == FlashMode.auto
-                                        ? FlashMode.torch
-                                        : FlashMode.off);
-                            });
-
-                            // 应用闪光灯设置
-                            await controller.setFlashMode(_flashMode);
-                          },
-                          tooltip: '闪光灯控制',
-                        ),
-                      ),
-
-                      // 拍照按钮
-                      FloatingActionButton(
-                        onPressed: () async {
-                          await _takePicture();
-                          final c = ref.read(cameraControllerProvider).value;
-                          if (c != null) {
-                            final double logicalMax = _maxZoom < 4.0
-                                ? _maxZoom
-                                : 4.0;
-                            double next = _currentZoom + 1.0;
-                            if (next > logicalMax - 1e-6) {
-                              next = 1.0;
-                            } else if (next > logicalMax) {
-                              next = logicalMax;
-                            }
-                            setState(() {
-                              _currentZoom = next;
-                            });
-                            try {
-                              await c.setZoomLevel(
-                                next.clamp(_minZoom, _maxZoom),
-                              );
-                            } catch (_) {}
-                          }
-                        },
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        child: const Icon(Icons.camera, size: 32),
-                      ),
-                      const SizedBox(height: 16),
-                      // 变焦倍数展示：形状、大小、间距与拍照按钮保持一致
-                      GestureDetector(
-                        onTap: () async {
-                          final c = ref.read(cameraControllerProvider).value;
-                          if (c != null) {
-                            final double logicalMax = _maxZoom < 4.0
-                                ? _maxZoom
-                                : 4.0;
-                            double next = _currentZoom + 1.0;
-                            if (next > logicalMax - 1e-6) {
-                              next = 1.0;
-                            } else if (next > logicalMax) {
-                              next = logicalMax;
-                            }
-                            setState(() {
-                              _currentZoom = next;
-                            });
-                            try {
-                              await c.setZoomLevel(
-                                next.clamp(_minZoom, _maxZoom),
-                              );
-                            } catch (_) {}
-                          }
-                        },
-                        child: Container(
-                          width: 56,
-                          height: 56,
-                          decoration: const BoxDecoration(
-                            color: Colors.black54,
-                            shape: BoxShape.circle,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            '${_currentZoom.toStringAsFixed(1)}x',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                                      ),
+                                  ],
+                                );
+                              },
                             ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // 返回按钮
-              Positioned(
-                top: 40,
-                left: 16,
-                child: SafeArea(
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                      size: 28,
                     ),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+
+                    // 右侧控制面板
+                    Positioned(
+                      right: 30,
+                      top: 0,
+                      bottom: 0,
+                      child: SafeArea(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // 闪光灯控制
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 24),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  _flashMode == FlashMode.off
+                                      ? Icons.flash_off
+                                      : (_flashMode == FlashMode.auto
+                                            ? Icons.flash_auto
+                                            : Icons.flash_on),
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                                onPressed: () async {
+                                  // 循环切换闪光灯模式
+                                  setState(() {
+                                    _flashMode = _flashMode == FlashMode.off
+                                        ? FlashMode.auto
+                                        : (_flashMode == FlashMode.auto
+                                              ? FlashMode.torch
+                                              : FlashMode.off);
+                                  });
+
+                                  // 应用闪光灯设置
+                                  await controller.setFlashMode(_flashMode);
+                                },
+                                tooltip: '闪光灯控制',
+                              ),
+                            ),
+
+                            // 拍照按钮
+                            FloatingActionButton(
+                              onPressed: () async {
+                                await _takePicture();
+                                final c = ref
+                                    .read(cameraControllerProvider)
+                                    .value;
+                                if (c != null) {
+                                  final double logicalMax = _maxZoom < 4.0
+                                      ? _maxZoom
+                                      : 4.0;
+                                  double next = _currentZoom + 1.0;
+                                  if (next > logicalMax - 1e-6) {
+                                    next = 1.0;
+                                  } else if (next > logicalMax) {
+                                    next = logicalMax;
+                                  }
+                                  setState(() {
+                                    _currentZoom = next;
+                                  });
+                                  try {
+                                    await c.setZoomLevel(
+                                      next.clamp(_minZoom, _maxZoom),
+                                    );
+                                  } catch (_) {}
+                                }
+                              },
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black,
+                              child: const Icon(Icons.camera, size: 32),
+                            ),
+                            const SizedBox(height: 16),
+                            // 变焦倍数展示：形状、大小、间距与拍照按钮保持一致
+                            GestureDetector(
+                              onTap: () async {
+                                final c = ref
+                                    .read(cameraControllerProvider)
+                                    .value;
+                                if (c != null) {
+                                  final double logicalMax = _maxZoom < 4.0
+                                      ? _maxZoom
+                                      : 4.0;
+                                  double next = _currentZoom + 1.0;
+                                  if (next > logicalMax - 1e-6) {
+                                    next = 1.0;
+                                  } else if (next > logicalMax) {
+                                    next = logicalMax;
+                                  }
+                                  setState(() {
+                                    _currentZoom = next;
+                                  });
+                                  try {
+                                    await c.setZoomLevel(
+                                      next.clamp(_minZoom, _maxZoom),
+                                    );
+                                  } catch (_) {}
+                                }
+                              },
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: const BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '${_currentZoom.toStringAsFixed(1)}x',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // 返回按钮
+                    Positioned(
+                      top: 40,
+                      left: 16,
+                      child: SafeArea(
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
     );
   }
 }

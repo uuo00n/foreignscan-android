@@ -1,12 +1,34 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camera/camera.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:foreignscan/core/services/camera_service.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
+
+enum CameraPermissionState {
+  unknown,
+  requesting,
+  granted,
+  denied,
+  permanentlyDenied,
+}
+
+CameraPermissionState cameraPermissionStateFromStatus(PermissionStatus status) {
+  if (status.isGranted) return CameraPermissionState.granted;
+  if (status.isPermanentlyDenied) {
+    return CameraPermissionState.permanentlyDenied;
+  }
+  return CameraPermissionState.denied;
+}
 
 // 相机服务提供者
 final cameraServiceProvider = Provider<CameraService>((ref) {
   return CameraService(ref.read(loggerProvider));
 });
+
+// 相机权限状态提供者
+final cameraPermissionStateProvider = StateProvider<CameraPermissionState>(
+  (ref) => CameraPermissionState.unknown,
+);
 
 // 相机控制器提供者
 final cameraControllerProvider =
@@ -19,6 +41,10 @@ final cameraControllerProvider =
 
 // 相机初始化状态提供者
 final cameraInitializationProvider = FutureProvider<bool>((ref) async {
+  final permissionState = ref.watch(cameraPermissionStateProvider);
+  if (permissionState != CameraPermissionState.granted) {
+    return false;
+  }
   try {
     final cameras = await availableCameras();
     return cameras.isNotEmpty;
@@ -31,6 +57,10 @@ final cameraInitializationProvider = FutureProvider<bool>((ref) async {
 final availableCamerasProvider = FutureProvider<List<CameraDescription>>((
   ref,
 ) async {
+  final permissionState = ref.watch(cameraPermissionStateProvider);
+  if (permissionState != CameraPermissionState.granted) {
+    return <CameraDescription>[];
+  }
   try {
     return await availableCameras();
   } catch (e) {
@@ -47,21 +77,52 @@ class CameraControllerNotifier
   final Ref _ref;
   CameraController? _currentController;
   bool _isInitializing = false;
-  DateTime? _lastInitAt;
 
-  CameraControllerNotifier(this._ref) : super(const AsyncValue.loading()) {
-    _initializeCamera();
+  // 不在构造函数中自动初始化，等待权限获得后由外部调用 initializeAfterPermission()
+  CameraControllerNotifier(this._ref) : super(const AsyncValue.data(null));
+
+  String _permissionErrorMessage(CameraPermissionState permissionState) {
+    switch (permissionState) {
+      case CameraPermissionState.permanentlyDenied:
+        return '相机权限已被永久拒绝，请前往系统设置开启后重试';
+      case CameraPermissionState.denied:
+        return '相机权限未授予，请授权后再试';
+      case CameraPermissionState.requesting:
+        return '正在请求相机权限，请稍候';
+      case CameraPermissionState.unknown:
+        return '尚未获取相机权限状态，请稍后重试';
+      case CameraPermissionState.granted:
+        return '';
+    }
+  }
+
+  bool _ensurePermissionGranted() {
+    final permissionState = _ref.read(cameraPermissionStateProvider);
+    if (permissionState == CameraPermissionState.granted) {
+      return true;
+    }
+
+    final message = _permissionErrorMessage(permissionState);
+    _ref.read(cameraErrorProvider.notifier).state = message;
+    state = AsyncValue.error(message, StackTrace.empty);
+    return false;
+  }
+
+  /// 权限获得后调用此方法初始化相机
+  Future<void> initializeAfterPermission() async {
+    if (_isInitializing) return;
+    if (!_ensurePermissionGranted()) return;
+
+    _ref.read(cameraErrorProvider.notifier).state = null;
+    state = const AsyncValue.loading();
+    await _initializeCamera();
   }
 
   Future<void> _initializeCamera() async {
     if (_isInitializing) return;
-    final now = DateTime.now();
-    if (_lastInitAt != null &&
-        now.difference(_lastInitAt!).inMilliseconds < 1200) {
-      return;
-    }
+    if (!_ensurePermissionGranted()) return;
+
     _isInitializing = true;
-    _lastInitAt = now;
     const int maxRetries = 3;
     int retryCount = 0;
 
@@ -81,7 +142,10 @@ class CameraControllerNotifier
 
           final cameras = await availableCameras();
           if (cameras.isEmpty) {
-            state = const AsyncValue.error('没有可用的相机', StackTrace.empty);
+            const message = '没有可用的相机';
+            state = const AsyncValue.error(message, StackTrace.empty);
+            _ref.read(cameraErrorProvider.notifier).state = message;
+            _isInitializing = false;
             return;
           }
 
@@ -129,23 +193,21 @@ class CameraControllerNotifier
           }
 
           if (initialized && _currentController != null) {
-            // 中文注释：
-            // 初始化完成后，显式设置闪光灯为关闭状态，避免某些设备或插件默认使用自动闪光导致拍照时自动亮灯。
             try {
               await _currentController!.setFlashMode(FlashMode.off);
             } catch (e) {
-              // 设置闪光灯失败不影响整体初始化，仅记录日志
               _ref.read(loggerProvider).w('设置闪光灯为关闭失败: $e');
             }
+            _ref.read(cameraErrorProvider.notifier).state = null;
             state = AsyncValue.data(_currentController);
             _ref.read(loggerProvider).i('相机初始化成功: ${camera.name}');
             _isInitializing = false;
-            return; // 成功初始化，退出循环
+            return;
           }
         } catch (e, stackTrace) {
           if (retryCount == maxRetries - 1) {
-            // 最后一次尝试失败，设置错误状态
             state = AsyncValue.error(e, stackTrace);
+            _ref.read(cameraErrorProvider.notifier).state = '相机初始化失败: $e';
             _ref.read(loggerProvider).e('相机初始化失败，已达到最大重试次数', error: e);
             _isInitializing = false;
             return;
@@ -156,12 +218,14 @@ class CameraControllerNotifier
       }
     } catch (e, stackTrace) {
       state = AsyncValue.error(e, stackTrace);
+      _ref.read(cameraErrorProvider.notifier).state = '相机初始化失败: $e';
       _ref.read(loggerProvider).e('相机初始化失败', error: e, stackTrace: stackTrace);
     }
     _isInitializing = false;
   }
 
   Future<void> switchCamera(int cameraIndex) async {
+    if (!_ensurePermissionGranted()) return;
     try {
       final cameras = await availableCameras();
       if (cameraIndex < 0 || cameraIndex >= cameras.length) {
@@ -172,6 +236,7 @@ class CameraControllerNotifier
       _ref.read(selectedCameraProvider.notifier).state = cameraIndex;
 
       // 重新初始化相机
+      _isInitializing = false; // 重置标志，允许重新初始化
       await _initializeCamera();
     } catch (e, stackTrace) {
       state = AsyncValue.error(e, stackTrace);
@@ -199,7 +264,10 @@ class CameraControllerNotifier
     }
   }
 
+  /// 刷新相机 — 重置初始化标志，确保不被阻塞
   Future<void> refreshCamera() async {
+    if (!_ensurePermissionGranted()) return;
+    _isInitializing = false;
     await _initializeCamera();
   }
 
@@ -217,9 +285,6 @@ class CameraControllerNotifier
     super.dispose();
   }
 }
-
-// 相机权限状态提供者
-final cameraPermissionProvider = StateProvider<bool>((ref) => false);
 
 // 相机错误信息提供者
 final cameraErrorProvider = StateProvider<String?>((ref) => null);

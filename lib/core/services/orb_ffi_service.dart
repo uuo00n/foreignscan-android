@@ -2,18 +2,21 @@ import 'dart:ffi' as ffi;
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart';
 
 final class OrbPairScore {
   final int goodMatches;
   final int keypointsA;
   final int keypointsB;
   final double similarity;
+  final int inlierCount;
 
   const OrbPairScore({
     required this.goodMatches,
     required this.keypointsA,
     required this.keypointsB,
     required this.similarity,
+    required this.inlierCount,
   });
 }
 
@@ -83,12 +86,36 @@ final class OrbFfiService {
         keypointsA: out.ref.keypointsA,
         keypointsB: out.ref.keypointsB,
         similarity: out.ref.similarity,
+        inlierCount: out.ref.inlierCount,
       );
     } finally {
       calloc.free(capturedNative);
       calloc.free(referenceNative);
       calloc.free(out);
     }
+  }
+
+  Future<OrbPairScore> comparePairAsync({
+    required String capturedPath,
+    required String referencePath,
+    int distanceThreshold = 50,
+    int maxFeatures = 2000,
+  }) async {
+    if (!File(capturedPath).existsSync()) {
+      throw OrbFfiException(1001, '拍摄图不存在: $capturedPath');
+    }
+    if (!File(referencePath).existsSync()) {
+      throw OrbFfiException(1002, '参考图不存在: $referencePath');
+    }
+    return compute(
+      _comparePairInIsolate,
+      _OrbCompareRequest(
+        capturedPath: capturedPath,
+        referencePath: referencePath,
+        distanceThreshold: distanceThreshold,
+        maxFeatures: maxFeatures,
+      ),
+    );
   }
 
   String _errorMessageForCode(int code) {
@@ -123,6 +150,9 @@ final class _OrbScoreNative extends ffi.Struct {
 
   @ffi.Float()
   external double similarity;
+
+  @ffi.Int32()
+  external int inlierCount;
 }
 
 typedef _NativeOrbCompareNative =
@@ -142,3 +172,26 @@ typedef _NativeOrbCompareDart =
       int maxFeatures,
       ffi.Pointer<_OrbScoreNative> outScore,
     );
+
+class _OrbCompareRequest {
+  final String capturedPath;
+  final String referencePath;
+  final int distanceThreshold;
+  final int maxFeatures;
+  const _OrbCompareRequest({
+    required this.capturedPath,
+    required this.referencePath,
+    required this.distanceThreshold,
+    required this.maxFeatures,
+  });
+}
+
+OrbPairScore _comparePairInIsolate(_OrbCompareRequest req) {
+  final service = OrbFfiService();
+  return service.comparePair(
+    capturedPath: req.capturedPath,
+    referencePath: req.referencePath,
+    distanceThreshold: req.distanceThreshold,
+    maxFeatures: req.maxFeatures,
+  );
+}

@@ -108,13 +108,37 @@ class SyncDataResult {
 }
 
 class HomeWorkflowController {
-  static const double similarityThreshold = 0.12;
+  static const double similarityThreshold = 0.18;
   static const int _orbDistanceThreshold = 50;
   static const int _orbMaxFeatures = 2000;
 
   final WidgetRef _ref;
 
   const HomeWorkflowController(this._ref);
+
+  /// 拍摄后立即校验场景相似度（不触发上传）
+  Future<SceneTransferResult> validateCapturedScene(
+    SceneData scene,
+    String imagePath,
+  ) async {
+    if (imagePath.isEmpty) {
+      return SceneTransferResult.failure(
+        '请先拍摄该场景',
+        failureType: SceneTransferFailureType.noCapturedImage,
+      );
+    }
+
+    final sceneForValidation = scene.copyWith(capturedImage: imagePath);
+    final similarity = await validateSceneSimilarity(sceneForValidation);
+    if (!similarity.passed) {
+      return SceneTransferResult.failure(
+        similarity.reason,
+        similarity: similarity,
+        failureType: similarity.failureType,
+      );
+    }
+    return SceneTransferResult.success(similarity: similarity);
+  }
 
   Future<SceneTransferResult> uploadSceneImage(SceneData scene) {
     return _validateAndUpload(scene: scene, persistResult: false);
@@ -179,7 +203,7 @@ class HomeWorkflowController {
 
     for (final candidate in candidates) {
       try {
-        final score = orbService.comparePair(
+        final score = await orbService.comparePairAsync(
           capturedPath: imagePath,
           referencePath: candidate.localPath,
           distanceThreshold: _orbDistanceThreshold,
@@ -228,7 +252,7 @@ class HomeWorkflowController {
       passed: passed,
       bestStyleImageId: bestStyleImageId,
       bestScore: bestScore.similarity,
-      bestGoodMatches: bestScore.goodMatches,
+      bestGoodMatches: bestScore.inlierCount,
       reason: reason,
       failureType: passed
           ? SceneTransferFailureType.none

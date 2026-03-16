@@ -29,6 +29,7 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
   @override
   void initState() {
     super.initState();
+    _loadPreferredServerConfig();
     _checkWifiInfo();
   }
 
@@ -124,6 +125,23 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
     }
   }
 
+  Future<void> _loadPreferredServerConfig() async {
+    try {
+      final serverConfigService = ref.read(serverConfigServiceProvider);
+      final config = await serverConfigService.load();
+      if (config.isConfigured && mounted) {
+        setState(() {
+          _serverIpController.text = config.ip ?? _serverIpController.text;
+          _portController.text =
+              (config.port ?? int.tryParse(_portController.text) ?? 8080)
+                  .toString();
+        });
+      }
+    } catch (_) {
+      // 保持页面级手工输入默认值即可
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -190,6 +208,11 @@ class _ImageUploadScreenState extends ConsumerState<ImageUploadScreen> {
                         border: OutlineInputBorder(),
                       ),
                       keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '提示：此处配置仅作用于当前上传流程，不会修改首页“服务器设置”中的全局配置。',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),

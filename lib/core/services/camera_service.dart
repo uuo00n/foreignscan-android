@@ -11,38 +11,66 @@ class CameraService {
 
   CameraService(this._logger);
 
-  /// 检查并请求相机权限
-  Future<bool> requestCameraPermission() async {
+  void _logCameraPermissionStatus(String action, PermissionStatus status) {
+    if (status.isGranted) {
+      _logger.i('$action: 相机权限已授予');
+      return;
+    }
+    if (status.isPermanentlyDenied) {
+      _logger.e('$action: 相机权限被永久拒绝，需要引导用户到设置页面');
+      return;
+    }
+    if (status.isDenied) {
+      _logger.w('$action: 相机权限被拒绝');
+      return;
+    }
+    _logger.w('$action: 相机权限状态=$status');
+  }
+
+  /// 请求相机权限并返回原始状态
+  Future<PermissionStatus> requestCameraPermissionStatus() async {
     try {
       final status = await Permission.camera.request();
-
-      if (status.isGranted) {
-        _logger.i('相机权限已授予');
-        return true;
-      } else if (status.isDenied) {
-        _logger.w('相机权限被拒绝');
-        return false;
-      } else if (status.isPermanentlyDenied) {
-        _logger.e('相机权限被永久拒绝，需要引导用户到设置页面');
-        return false;
-      }
-
-      return false;
+      _logCameraPermissionStatus('请求相机权限', status);
+      return status;
     } catch (e, stackTrace) {
       _logger.e('请求相机权限失败', error: e, stackTrace: stackTrace);
+      return PermissionStatus.denied;
+    }
+  }
+
+  /// 获取当前相机权限原始状态
+  Future<PermissionStatus> checkCameraPermissionStatus() async {
+    try {
+      final status = await Permission.camera.status;
+      _logCameraPermissionStatus('检查相机权限', status);
+      return status;
+    } catch (e, stackTrace) {
+      _logger.e('检查相机权限失败', error: e, stackTrace: stackTrace);
+      return PermissionStatus.denied;
+    }
+  }
+
+  /// 跳转系统设置页（用于永久拒绝场景）
+  Future<bool> openCameraPermissionSettings() async {
+    try {
+      return await openAppSettings();
+    } catch (e, stackTrace) {
+      _logger.e('打开系统设置失败', error: e, stackTrace: stackTrace);
       return false;
     }
   }
 
+  /// 兼容旧调用：检查并请求相机权限
+  Future<bool> requestCameraPermission() async {
+    final status = await requestCameraPermissionStatus();
+    return status.isGranted;
+  }
+
   /// 检查相机权限状态
   Future<bool> checkCameraPermission() async {
-    try {
-      final status = await Permission.camera.status;
-      return status.isGranted;
-    } catch (e) {
-      _logger.e('检查相机权限失败', error: e);
-      return false;
-    }
+    final status = await checkCameraPermissionStatus();
+    return status.isGranted;
   }
 
   /// 请求存储权限

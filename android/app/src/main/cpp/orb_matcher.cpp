@@ -6,6 +6,7 @@
 #include <opencv2/features2d.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/calib3d.hpp>
 
 namespace {
 constexpr int kDefaultDistanceThreshold = 50;
@@ -57,6 +58,14 @@ void to_gray(const cv::Mat& input, cv::Mat& out) {
 
   out = cv::Mat();
 }
+constexpr int kMaxLongerEdge = 1000;
+
+void resize_if_needed(cv::Mat& img) {
+  const int longer = std::max(img.cols, img.rows);
+  if (longer <= kMaxLongerEdge) return;
+  const double scale = static_cast<double>(kMaxLongerEdge) / longer;
+  cv::resize(img, img, cv::Size(), scale, scale, cv::INTER_AREA);
+}
 }  // namespace
 
 int orb_compare_images(const char* captured_path,
@@ -72,6 +81,7 @@ int orb_compare_images(const char* captured_path,
   out_score->keypoints_a = 0;
   out_score->keypoints_b = 0;
   out_score->similarity = 0.0F;
+  out_score->inlier_count = 0;
 
   if (captured_path == nullptr || reference_path == nullptr ||
       captured_path[0] == '\0' || reference_path[0] == '\0') {
@@ -95,6 +105,9 @@ int orb_compare_images(const char* captured_path,
     if (captured_gray.empty() || reference_gray.empty()) {
       return 4;
     }
+
+    resize_if_needed(captured_gray);
+    resize_if_needed(reference_gray);
 
     const int safe_max_features =
         max_features > 0 ? max_features : kDefaultMaxFeatures;
@@ -134,10 +147,32 @@ int orb_compare_images(const char* captured_path,
 
     out_score->good_matches = good_matches;
 
+    out_score->inlier_count = good_matches; // 默认退化为距离过滤值
+
+    if (good_matches >= 4) {
+      std::vector<cv::Point2f> pts_a, pts_b;
+      pts_a.reserve(good_matches);
+      pts_b.reserve(good_matches);
+      for (const auto& m : matches) {
+        if (m.distance < safe_distance_threshold) {
+          pts_a.push_back(keypoints_a[m.queryIdx].pt);
+          pts_b.push_back(keypoints_b[m.trainIdx].pt);
+        }
+      }
+      cv::Mat mask;
+      cv::findHomography(pts_a, pts_b, cv::RANSAC, 3.0, mask);
+      if (!mask.empty()) {
+        out_score->inlier_count = cv::countNonZero(mask);
+      }
+    }
+
     const int denominator =
         std::max(1, std::min(out_score->keypoints_a, out_score->keypoints_b));
-    out_score->similarity = static_cast<float>(good_matches) /
-                            static_cast<float>(denominator);
+    const float raw_ratio =
+        static_cast<float>(good_matches) / static_cast<float>(denominator);
+    const float inlier_ratio =
+        static_cast<float>(out_score->inlier_count) / static_cast<float>(denominator);
+    out_score->similarity = 0.7f * inlier_ratio + 0.3f * raw_ratio;
 
     return 0;
   } catch (const cv::Exception&) {
