@@ -146,8 +146,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         await _showServerSetupDialog(
           initialIp: config.ip ?? '',
           initialPort: config.port,
-          initialPadId: config.padId ?? '',
-          initialPadKey: config.padKey ?? '',
         );
       } else {
         // 配置已存在，统一应用并初始化数据
@@ -185,15 +183,13 @@ class _HomePageState extends ConsumerState<HomePage> {
   Future<void> _showServerSetupDialog({
     required String initialIp,
     required int? initialPort,
-    String initialPadId = '',
-    String initialPadKey = '',
+    String initialBindKey = '',
   }) async {
     final result = await showServerSetupDialog(
       context: context,
       initialIp: initialIp,
       initialPort: initialPort,
-      initialPadId: initialPadId,
-      initialPadKey: initialPadKey,
+      initialBindKey: initialBindKey,
       onTestConnection: (ip, port) async {
         final wifiService = ref.read(wifiServiceProvider);
         wifiService.setServerAddress(ip, port);
@@ -213,13 +209,24 @@ class _HomePageState extends ConsumerState<HomePage> {
     final wifiService = ref.read(wifiServiceProvider);
 
     try {
-      await serverConfigService.saveCurrent(
+      final bindResult = await serverConfigService.bindPadWithKey(
         ip: result.ip,
         port: result.port,
         isWiredMode: result.isWiredMode,
-        padId: result.padId,
-        padKey: result.padKey,
+        bindKey: result.bindKey,
       );
+      if (!bindResult.success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(bindResult.message),
+              backgroundColor: AppTheme.errorColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
       await serverConfigService.applyToClients(
         dio: dio,
         wifiService: wifiService,

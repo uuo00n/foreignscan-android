@@ -8,15 +8,13 @@ class ServerSetupResult {
   final String ip;
   final int port;
   final bool isWiredMode;
-  final String padId;
-  final String padKey;
+  final String bindKey;
 
   const ServerSetupResult({
     required this.ip,
     required this.port,
     required this.isWiredMode,
-    required this.padId,
-    required this.padKey,
+    required this.bindKey,
   });
 }
 
@@ -24,16 +22,14 @@ Future<ServerSetupResult?> showServerSetupDialog({
   required BuildContext context,
   required String initialIp,
   required int? initialPort,
-  String initialPadId = '',
-  String initialPadKey = '',
+  String initialBindKey = '',
   required Future<bool> Function(String ip, int port) onTestConnection,
 }) async {
   final ipController = TextEditingController(text: initialIp);
   final portController = TextEditingController(
     text: initialPort?.toString() ?? '',
   );
-  final padIdController = TextEditingController(text: initialPadId);
-  final padKeyController = TextEditingController(text: initialPadKey);
+  final bindKeyController = TextEditingController(text: initialBindKey);
 
   bool isWiredMode = false;
   String lastWirelessIp = '';
@@ -157,25 +153,11 @@ Future<ServerSetupResult?> showServerSetupDialog({
                     ),
                     const SizedBox(height: 16),
                     TextField(
-                      controller: padIdController,
-                      decoration: InputDecoration(
-                        labelText: 'Pad ID',
-                        hintText: '例如: pad-room1',
-                        prefixIcon: const Icon(Icons.tablet_android_rounded),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        filled: true,
-                        fillColor: AppTheme.backgroundLight,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: padKeyController,
+                      controller: bindKeyController,
                       obscureText: true,
                       decoration: InputDecoration(
-                        labelText: 'Pad Key',
-                        hintText: '请输入 Pad 鉴权密钥',
+                        labelText: '绑定 Key',
+                        hintText: '请输入 Windows 生成的绑定码',
                         prefixIcon: const Icon(Icons.password_rounded),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -302,11 +284,10 @@ Future<ServerSetupResult?> showServerSetupDialog({
                                   });
                                   return;
                                 }
-                                if (padIdController.text.trim().isEmpty ||
-                                    padKeyController.text.trim().isEmpty) {
+                                if (bindKeyController.text.trim().isEmpty) {
                                   setDialogState(() {
                                     isTesting = false;
-                                    testMessage = '请输入 Pad ID 和 Pad Key';
+                                    testMessage = '请输入绑定 Key';
                                   });
                                   return;
                                 }
@@ -332,8 +313,7 @@ Future<ServerSetupResult?> showServerSetupDialog({
                                       ip: ip,
                                       port: port,
                                       isWiredMode: isWiredMode,
-                                      padId: padIdController.text.trim(),
-                                      padKey: padKeyController.text.trim(),
+                                      bindKey: bindKeyController.text.trim(),
                                     ),
                                   );
                                 } else {
@@ -374,8 +354,7 @@ Future<ServerSetupResult?> showServerSetupDialog({
       Future<void>.delayed(const Duration(milliseconds: 300), () {
         ipController.dispose();
         portController.dispose();
-        padIdController.dispose();
-        padKeyController.dispose();
+        bindKeyController.dispose();
       }),
     );
   }
