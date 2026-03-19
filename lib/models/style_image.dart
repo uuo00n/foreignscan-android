@@ -5,7 +5,7 @@ import 'dart:convert';
 
 class StyleImage {
   final String id; // 样式图ID（ObjectID的Hex字符串）
-  final String sceneId; // 场景ID
+  final String pointId; // 点位ID
   final String? name; // 样式图名称
   final String? description; // 样式图描述
   final String? filename; // 文件名
@@ -14,7 +14,7 @@ class StyleImage {
 
   StyleImage({
     required this.id,
-    required this.sceneId,
+    required this.pointId,
     this.name,
     this.description,
     this.filename,
@@ -27,10 +27,13 @@ class StyleImage {
   factory StyleImage.fromJson(Map<String, dynamic> json) {
     return StyleImage(
       id: json['id']?.toString() ?? '',
-      sceneId: (json['sceneId'] is Map && json['sceneId']['Hex'] != null)
-          ? json['sceneId']['Hex']
-                .toString() // 兼容极少数序列化形式
-          : (json['sceneId']?.toString() ?? ''),
+      pointId: (json['pointId'] is Map && json['pointId']['Hex'] != null)
+          ? json['pointId']['Hex'].toString()
+          : ((json['pointId']?.toString() ??
+                    (json['sceneId'] is Map && json['sceneId']['Hex'] != null
+                        ? json['sceneId']['Hex'].toString()
+                        : json['sceneId']?.toString())) ??
+                ''),
       name: json['name']?.toString(),
       description: json['description']?.toString(),
       filename: json['filename']?.toString(),
@@ -62,7 +65,8 @@ class StyleImage {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'sceneId': sceneId,
+      'pointId': pointId,
+      'sceneId': pointId,
       'name': name,
       'description': description,
       'filename': filename,
@@ -83,4 +87,6 @@ class StyleImage {
   static String toJsonList(List<Map<String, dynamic>> list) {
     return jsonEncode(list);
   }
+
+  String get sceneId => pointId;
 }

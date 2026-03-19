@@ -214,7 +214,11 @@ class HomeViewModel extends StateNotifier<HomeState> {
     return scenes.map((scene) {
       // 1. 筛选出该场景的所有记录
       final sceneRecords = records
-          .where((r) => r.sceneName == scene.name)
+          .where(
+            (r) =>
+                (r.pointId.isNotEmpty && r.pointId == scene.id) ||
+                (r.pointId.isEmpty && r.sceneName == scene.name),
+          )
           .toList();
 
       if (sceneRecords.isEmpty) {

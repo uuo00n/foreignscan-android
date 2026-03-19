@@ -37,8 +37,8 @@ class RecordService {
 
   /// 获取拍摄记录（优先网络，失败兜底本地缓存）
   /// 说明：
-  /// - 后端 /api/images 返回图片记录列表，字段包含 id、sceneId、path、createdAt 等
-  /// - 为了显示场景名称，这里会先调用 SceneService.getScenes() 并用 sceneId 做映射
+  /// - 后端 /api/images 返回图片记录列表，字段包含 id、pointId、roomId、path、createdAt 等
+  /// - 为了显示点位名称，这里会先调用 SceneService.getScenes() 并用 pointId 做映射
   /// - 图片 path 可能是相对路径（如 uploads/images/...），需要拼接为完整 URL 才能在前端展示
   Future<List<InspectionRecord>> getRecords({bool forceOffline = false}) async {
     try {
@@ -53,9 +53,9 @@ class RecordService {
 
         if (data is Map && data['images'] is List) {
           final scenes = await scenesFuture;
-          // 构建 sceneId -> sceneName 映射表
-          final Map<String, String> sceneNameById = {
-            for (final s in scenes) s.id: s.name,
+          // 构建 pointId -> scene(点位) 映射表
+          final Map<String, dynamic> sceneByPointId = {
+            for (final s in scenes) s.id: s,
           };
 
           final List items = data['images'];
@@ -65,10 +65,15 @@ class RecordService {
 
                 // 提前解析字段，避免多层嵌套，提高可读性
                 final String id = m['id']?.toString() ?? '';
-                final String sceneId =
-                    m['sceneId'] is Map && m['sceneId']['Hex'] != null
-                    ? m['sceneId']['Hex'].toString()
-                    : (m['sceneId']?.toString() ?? '');
+                final String pointId =
+                    m['pointId'] is Map && m['pointId']['Hex'] != null
+                    ? m['pointId']['Hex'].toString()
+                    : (m['pointId']?.toString() ??
+                          (m['sceneId'] is Map && m['sceneId']['Hex'] != null
+                              ? m['sceneId']['Hex'].toString()
+                              : m['sceneId']?.toString()) ??
+                          '');
+                final String roomId = m['roomId']?.toString() ?? '';
                 final String path = m['path']?.toString() ?? '';
                 final String createdAtStr =
                     m['createdAt']?.toString() ??
@@ -93,9 +98,21 @@ class RecordService {
                   ts = DateTime.now();
                 }
 
+                final dynamic scene = sceneByPointId[pointId];
+                final String roomName =
+                    (scene != null && scene.roomName != null)
+                    ? scene.roomName.toString()
+                    : (m['roomName']?.toString() ?? roomId);
+                final String pointName = (scene != null && scene.name != null)
+                    ? scene.name.toString()
+                    : (m['pointName']?.toString() ?? pointId);
+
                 return InspectionRecord(
                   id: id,
-                  sceneName: sceneNameById[sceneId] ?? '未知场景',
+                  sceneName: pointName.isNotEmpty ? pointName : '未知点位',
+                  pointId: pointId,
+                  roomId: roomId,
+                  roomName: roomName,
                   imagePath: fullUrl,
                   timestamp: ts,
                   status: status,

@@ -146,6 +146,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         await _showServerSetupDialog(
           initialIp: config.ip ?? '',
           initialPort: config.port,
+          initialPadId: config.padId ?? '',
+          initialPadKey: config.padKey ?? '',
         );
       } else {
         // 配置已存在，统一应用并初始化数据
@@ -183,11 +185,15 @@ class _HomePageState extends ConsumerState<HomePage> {
   Future<void> _showServerSetupDialog({
     required String initialIp,
     required int? initialPort,
+    String initialPadId = '',
+    String initialPadKey = '',
   }) async {
     final result = await showServerSetupDialog(
       context: context,
       initialIp: initialIp,
       initialPort: initialPort,
+      initialPadId: initialPadId,
+      initialPadKey: initialPadKey,
       onTestConnection: (ip, port) async {
         final wifiService = ref.read(wifiServiceProvider);
         wifiService.setServerAddress(ip, port);
@@ -211,6 +217,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         ip: result.ip,
         port: result.port,
         isWiredMode: result.isWiredMode,
+        padId: result.padId,
+        padKey: result.padKey,
       );
       await serverConfigService.applyToClients(
         dio: dio,

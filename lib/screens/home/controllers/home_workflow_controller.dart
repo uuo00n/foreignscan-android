@@ -354,12 +354,15 @@ class HomeWorkflowController {
       final wifiService = _ref.read(wifiServiceProvider);
       final uploadResult = await wifiService.uploadImageFromCamera(
         imagePath,
-        sceneId: scene.id,
+        pointId: scene.id,
       );
 
-      if (uploadResult == null) {
+      if (uploadResult == null || uploadResult['success'] != true) {
+        final message = uploadResult != null && uploadResult['message'] != null
+            ? uploadResult['message'].toString()
+            : '传输失败，请检查网络连接和服务器设置';
         return SceneTransferResult.failure(
-          '传输失败，请检查网络连接和服务器设置',
+          message,
           similarity: similarity,
           failureType: SceneTransferFailureType.uploadFailed,
         );
@@ -450,6 +453,9 @@ class HomeWorkflowController {
     final newRecord = InspectionRecord(
       id: imageId,
       sceneName: scene.name,
+      pointId: scene.id,
+      roomId: scene.roomId,
+      roomName: scene.roomName,
       imagePath: fullUrl.isNotEmpty ? fullUrl : (scene.capturedImage ?? ''),
       timestamp: DateTime.now(),
       status: '已上传',

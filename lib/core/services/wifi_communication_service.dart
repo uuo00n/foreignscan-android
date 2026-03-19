@@ -19,6 +19,8 @@ class WiFiCommunicationService {
   final Dio _dio;
   String _serverIP = _defaultServerIP;
   int _port = _defaultPort;
+  String _padId = '';
+  String _padKey = '';
 
   WiFiCommunicationService(this._logger)
     : _dio = Dio(
@@ -32,6 +34,18 @@ class WiFiCommunicationService {
   void setServerAddress(String ip, int port) {
     _serverIP = ip;
     _port = port;
+  }
+
+  void setPadCredentials(String? padId, String? padKey) {
+    _padId = (padId ?? '').trim();
+    _padKey = (padKey ?? '').trim();
+  }
+
+  Map<String, String> _buildPadHeaders() {
+    if (_padId.isEmpty || _padKey.isEmpty) {
+      return const {};
+    }
+    return {'X-Pad-Id': _padId, 'X-Pad-Key': _padKey};
   }
 
   /// Get current WiFi network information
@@ -128,6 +142,7 @@ class WiFiCommunicationService {
   Future<bool> uploadImage(
     String imagePath,
     String recordId, {
+    String? pointId,
     String? sceneId,
   }) async {
     try {
@@ -145,7 +160,10 @@ class WiFiCommunicationService {
           imagePath,
           filename: 'record_$recordId.jpg',
         ),
-        if (sceneId != null && sceneId.isNotEmpty) 'sceneId': sceneId,
+        if ((pointId ?? '').isNotEmpty)
+          'pointId': pointId
+        else if ((sceneId ?? '').isNotEmpty)
+          'pointId': sceneId,
         // 可选元数据：recordId（后端会忽略未知字段，但我们保留用于日志追踪）
         'recordId': recordId,
       });
@@ -157,6 +175,7 @@ class WiFiCommunicationService {
           contentType: 'multipart/form-data',
           sendTimeout: Duration(seconds: 30), // Longer timeout for file upload
           receiveTimeout: Duration(seconds: 30),
+          headers: _buildPadHeaders(),
         ),
         onSendProgress: (sent, total) {
           final progress = (sent / total * 100).toStringAsFixed(2);
@@ -182,6 +201,7 @@ class WiFiCommunicationService {
   /// - 通过查询参数 filename 指定自定义文件名，便于在服务器侧识别
   Future<Map<String, dynamic>?> uploadImageFromCamera(
     String imagePath, {
+    String? pointId,
     String? sceneId,
   }) async {
     try {
@@ -200,14 +220,18 @@ class WiFiCommunicationService {
           '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
 
       // 生成文件名：年月日_时分秒_场景编号
-      final fileName = sceneId != null
-          ? '${dateStr}_${timeStr}_$sceneId.jpg'
-          : '${dateStr}_${timeStr}_unknown.jpg';
+      final normalizedPointId = (pointId ?? '').trim().isNotEmpty
+          ? pointId!.trim()
+          : (sceneId ?? '').trim();
+      final fileSuffix = normalizedPointId.isNotEmpty
+          ? normalizedPointId
+          : 'unknown';
+      final fileName = '${dateStr}_${timeStr}_$fileSuffix.jpg';
 
       // 构建表单：与后端字段保持一致
       final formData = FormData.fromMap({
         'file': await MultipartFile.fromFile(imagePath, filename: fileName),
-        if (sceneId != null && sceneId.isNotEmpty) 'sceneId': sceneId,
+        if (normalizedPointId.isNotEmpty) 'pointId': normalizedPointId,
         // 附带自定义文件名作为额外参数（后端主要使用 query 中的 filename）
         'customFileName': fileName,
       });
@@ -223,6 +247,7 @@ class WiFiCommunicationService {
           receiveTimeout: Duration(seconds: 30),
           headers: {
             'X-Custom-Filename': fileName, // 添加自定义文件名作为请求头
+            ..._buildPadHeaders(),
           },
         ),
         onSendProgress: (sent, total) {
@@ -236,11 +261,18 @@ class WiFiCommunicationService {
         return response.data;
       } else {
         _logger.w('Failed to upload camera image: ${response.statusCode}');
-        return null;
+        return {
+          'success': false,
+          'message': '上传失败: HTTP ${response.statusCode}',
+        };
       }
     } catch (e) {
+      if (e is DioException && e.response?.statusCode == 401) {
+        _logger.w('Pad auth failed while uploading camera image');
+        return {'success': false, 'message': 'Pad鉴权失败，请检查 Pad ID 和 Pad Key'};
+      }
       _logger.e('Error uploading camera image: $e');
-      return null;
+      return {'success': false, 'message': '上传异常: $e'};
     }
   }
 

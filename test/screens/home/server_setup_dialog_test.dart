@@ -33,6 +33,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), '192.168.1.50');
     await tester.enterText(find.byType(TextField).at(1), '8080');
+    await tester.enterText(find.byType(TextField).at(2), 'pad-room1');
+    await tester.enterText(find.byType(TextField).at(3), 'room1-key');
 
     await tester.tap(find.text('测试连接并保存'));
     await tester.pump();
@@ -44,6 +46,8 @@ void main() {
     expect(result, isNotNull);
     expect(result!.ip, '192.168.1.50');
     expect(result.port, 8080);
+    expect(result.padId, 'pad-room1');
+    expect(result.padKey, 'room1-key');
     expect(tester.takeException(), isNull);
   });
 
@@ -106,6 +110,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), '192.168.1.50');
     await tester.enterText(find.byType(TextField).at(1), '8080');
+    await tester.enterText(find.byType(TextField).at(2), 'pad-room1');
+    await tester.enterText(find.byType(TextField).at(3), 'room1-key');
     await tester.tap(find.text('测试连接并保存'));
     await tester.pump();
 

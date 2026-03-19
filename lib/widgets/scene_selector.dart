@@ -52,7 +52,7 @@ class SceneSelector extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               const Text(
-                '场景选择',
+                '点位选择',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,

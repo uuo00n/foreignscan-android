@@ -3,6 +3,9 @@ import 'dart:convert';
 class InspectionRecord {
   final String id;
   final String sceneName;
+  final String pointId;
+  final String roomId;
+  final String roomName;
   final String imagePath;
   final DateTime timestamp;
   final String status;
@@ -10,6 +13,9 @@ class InspectionRecord {
   InspectionRecord({
     required this.id,
     required this.sceneName,
+    this.pointId = '',
+    this.roomId = '',
+    this.roomName = '',
     required this.imagePath,
     required this.timestamp,
     required this.status,
@@ -19,6 +25,9 @@ class InspectionRecord {
     return InspectionRecord(
       id: json['id'] ?? '',
       sceneName: json['sceneName'] ?? '',
+      pointId: json['pointId'] ?? '',
+      roomId: json['roomId'] ?? '',
+      roomName: json['roomName'] ?? '',
       imagePath: json['imagePath'] ?? '',
       timestamp: json['timestamp'] != null
           ? DateTime.parse(json['timestamp'])
@@ -37,6 +46,9 @@ class InspectionRecord {
     return {
       'id': id,
       'sceneName': sceneName,
+      'pointId': pointId,
+      'roomId': roomId,
+      'roomName': roomName,
       'imagePath': imagePath,
       'timestamp': timestamp.toIso8601String(),
       'status': status,
@@ -53,6 +65,9 @@ class InspectionRecord {
   InspectionRecord copyWith({
     String? id,
     String? sceneName,
+    String? pointId,
+    String? roomId,
+    String? roomName,
     String? imagePath,
     DateTime? timestamp,
     String? status,
@@ -60,6 +75,9 @@ class InspectionRecord {
     return InspectionRecord(
       id: id ?? this.id,
       sceneName: sceneName ?? this.sceneName,
+      pointId: pointId ?? this.pointId,
+      roomId: roomId ?? this.roomId,
+      roomName: roomName ?? this.roomName,
       imagePath: imagePath ?? this.imagePath,
       timestamp: timestamp ?? this.timestamp,
       status: status ?? this.status,
@@ -68,7 +86,7 @@ class InspectionRecord {
 
   @override
   String toString() {
-    return 'InspectionRecord(id: $id, sceneName: $sceneName, imagePath: $imagePath, timestamp: $timestamp, status: $status)';
+    return 'InspectionRecord(id: $id, sceneName: $sceneName, pointId: $pointId, roomId: $roomId, roomName: $roomName, imagePath: $imagePath, timestamp: $timestamp, status: $status)';
   }
 
   @override
@@ -77,6 +95,9 @@ class InspectionRecord {
     return other is InspectionRecord &&
         other.id == id &&
         other.sceneName == sceneName &&
+        other.pointId == pointId &&
+        other.roomId == roomId &&
+        other.roomName == roomName &&
         other.imagePath == imagePath &&
         other.timestamp == timestamp &&
         other.status == status;
@@ -86,6 +107,9 @@ class InspectionRecord {
   int get hashCode {
     return id.hashCode ^
         sceneName.hashCode ^
+        pointId.hashCode ^
+        roomId.hashCode ^
+        roomName.hashCode ^
         imagePath.hashCode ^
         timestamp.hashCode ^
         status.hashCode;

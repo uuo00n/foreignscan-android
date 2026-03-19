@@ -23,6 +23,8 @@ class AppDrawer extends ConsumerStatefulWidget {
 class _AppDrawerState extends ConsumerState<AppDrawer> {
   final TextEditingController _ipController = TextEditingController();
   final TextEditingController _portController = TextEditingController();
+  final TextEditingController _padIdController = TextEditingController();
+  final TextEditingController _padKeyController = TextEditingController();
   DrawerServerSettings _serverSettings = const DrawerServerSettings();
   bool _isConnecting = false;
   bool _isConnected = false;
@@ -48,6 +50,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   void dispose() {
     _ipController.dispose();
     _portController.dispose();
+    _padIdController.dispose();
+    _padKeyController.dispose();
     super.dispose();
   }
 
@@ -73,6 +77,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final result = await _settingsController(ref).testConnectionAndPersist(
       ipInput: _ipController.text,
       portInput: _portController.text,
+      padIdInput: _padIdController.text,
+      padKeyInput: _padKeyController.text,
       isWiredMode: _serverSettings.isWiredMode,
     );
 
@@ -245,6 +251,25 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                       ),
                       keyboardType: TextInputType.number,
                     ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _padIdController,
+                      decoration: const InputDecoration(
+                        labelText: 'Pad ID',
+                        hintText: '例如: pad-room1',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _padKeyController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Pad Key',
+                        hintText: '请输入 Pad 鉴权密钥',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.start,
@@ -401,6 +426,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       _serverSettings = settings;
       _ipController.text = settings.ip;
       _portController.text = settings.portText;
+      _padIdController.text = settings.padId;
+      _padKeyController.text = settings.padKey;
     });
   }
 }

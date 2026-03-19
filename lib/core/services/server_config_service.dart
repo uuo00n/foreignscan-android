@@ -8,6 +8,8 @@ class ServerConfig {
   final bool isWiredMode;
   final String wirelessIp;
   final String wiredIp;
+  final String? padId;
+  final String? padKey;
 
   const ServerConfig({
     required this.ip,
@@ -15,6 +17,8 @@ class ServerConfig {
     required this.isWiredMode,
     required this.wirelessIp,
     required this.wiredIp,
+    required this.padId,
+    required this.padKey,
   });
 
   bool get isConfigured =>
@@ -35,6 +39,8 @@ class ServerConfigService {
 
     final savedWirelessIp = prefs.getString('wireless_server_ip') ?? '';
     final savedWiredIp = prefs.getString('wired_server_ip') ?? '';
+    final savedPadId = prefs.getString('pad_id');
+    final savedPadKey = prefs.getString('pad_key');
 
     final effectiveIp = isWiredMode
         ? (savedWiredIp.isNotEmpty ? savedWiredIp : savedIp)
@@ -46,6 +52,8 @@ class ServerConfigService {
       isWiredMode: isWiredMode,
       wirelessIp: savedWirelessIp,
       wiredIp: savedWiredIp,
+      padId: savedPadId,
+      padKey: savedPadKey,
     );
   }
 
@@ -53,6 +61,8 @@ class ServerConfigService {
     required String ip,
     required int port,
     required bool isWiredMode,
+    String? padId,
+    String? padKey,
   }) async {
     final prefs = await _prefs;
 
@@ -64,6 +74,19 @@ class ServerConfigService {
       await prefs.setString('wired_server_ip', ip);
     } else {
       await prefs.setString('wireless_server_ip', ip);
+    }
+
+    final normalizedPadId = (padId ?? '').trim();
+    final normalizedPadKey = (padKey ?? '').trim();
+    if (normalizedPadId.isNotEmpty) {
+      await prefs.setString('pad_id', normalizedPadId);
+    } else {
+      await prefs.remove('pad_id');
+    }
+    if (normalizedPadKey.isNotEmpty) {
+      await prefs.setString('pad_key', normalizedPadKey);
+    } else {
+      await prefs.remove('pad_key');
     }
   }
 
@@ -87,6 +110,18 @@ class ServerConfigService {
     final port = effectiveConfig.port!;
 
     wifiService.setServerAddress(ip, port);
+    wifiService.setPadCredentials(
+      effectiveConfig.padId,
+      effectiveConfig.padKey,
+    );
     dio.options.baseUrl = 'http://$ip:$port/api';
+    if ((effectiveConfig.padId ?? '').isNotEmpty &&
+        (effectiveConfig.padKey ?? '').isNotEmpty) {
+      dio.options.headers['X-Pad-Id'] = effectiveConfig.padId!;
+      dio.options.headers['X-Pad-Key'] = effectiveConfig.padKey!;
+    } else {
+      dio.options.headers.remove('X-Pad-Id');
+      dio.options.headers.remove('X-Pad-Key');
+    }
   }
 }

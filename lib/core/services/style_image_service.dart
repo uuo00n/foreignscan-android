@@ -22,16 +22,17 @@ class StyleImageService {
 
   StyleImageService(this._prefs, this._dio);
 
-  // 获取指定场景的样式图列表
+  // 获取指定点位的样式图列表（后端点位一对一）
   Future<List<StyleImage>> getStyleImagesByScene(String sceneId) async {
-    final cacheKey = 'style_images_$sceneId';
+    final pointId = sceneId;
+    final cacheKey = 'style_images_point_$pointId';
     try {
-      // 说明：Dio 的 baseUrl 已含 /api 前缀，因此这里使用 /style-images/scene/<sceneId>
-      final response = await _dio.get('/style-images/scene/$sceneId');
+      final response = await _dio.get('/style-images/point/$pointId');
       final data = response.data;
 
-      if (data is Map && data['styleImages'] is List) {
-        final List items = data['styleImages'];
+      if (data is Map && data['success'] == true) {
+        final dynamic single = data['styleImage'];
+        final List items = single == null ? <dynamic>[] : <dynamic>[single];
         final images = items
             .map((e) => StyleImage.fromJson(e as Map<String, dynamic>))
             .toList();

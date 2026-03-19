@@ -78,7 +78,7 @@ class SceneDisplay extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '当前场景',
+                      '当前点位',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppTheme.textSecondary,

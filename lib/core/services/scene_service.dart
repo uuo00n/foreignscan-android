@@ -19,58 +19,56 @@ class SceneService {
 
   SceneService(this._prefs, this._dio);
 
+  String _buildSceneName(String pointName, String roomName) {
+    final p = pointName.trim();
+    final r = roomName.trim();
+    if (r.isEmpty) return p;
+    if (p.isEmpty) return r;
+    return '$r / $p';
+  }
+
   Future<List<SceneData>> getScenes({bool forceOffline = false}) async {
     try {
       if (!forceOffline) {
-        // 先尝试从后端接口获取
-        // 说明：后端 Gin 路由基础路径为 /api，这里使用 Dio 已设置的 baseUrl（例如 http://localhost:8080/api）
-        final response = await _dio.get('/scenes');
+        final prefs = await _prefs;
+        final padId = (prefs.getString('pad_id') ?? '').trim();
+        final padKey = (prefs.getString('pad_key') ?? '').trim();
+        final headers = <String, String>{};
+        if (padId.isNotEmpty && padKey.isNotEmpty) {
+          headers['X-Pad-Id'] = padId;
+          headers['X-Pad-Key'] = padKey;
+        }
+        final response = await _dio.get(
+          '/pad/room-context',
+          options: Options(headers: headers),
+        );
         final data = response.data;
 
-        // 后端返回结构示例：{ success: true, scenes: [...] }
-        if (data is Map && data['scenes'] is List) {
-          final List scenesList = data['scenes'];
-          final scenes = await Future.wait(
-            scenesList.map((item) async {
-              final m = item as Map<String, dynamic>;
-              final id = m['id']?.toString() ?? '';
+        if (data is Map &&
+            data['success'] == true &&
+            data['room'] is Map &&
+            data['points'] is List) {
+          final room = data['room'] as Map;
+          final roomId = room['id']?.toString() ?? '';
+          final roomName = room['name']?.toString() ?? roomId;
 
-              // 并行请求每个场景的最新状态（可选优化：后端已在列表接口返回状态最好，若未返回则需补充请求）
-              // 假设后端 /scenes 接口暂未返回 latestStatus，则需要单独 fetchDetail
-              // 但为了性能，这里我们先直接解析（如果后端已在 /scenes 列表里补充了字段最好）
-              // 补充逻辑：如果列表项没有状态字段，尝试调用 /scenes/{id} 获取详情（注意并发量）
-              // 考虑到并发请求太多，暂时先只从列表项解析（假设后端 /scenes 接口已包含或将包含）
-              // 如果后端 /scenes 没返回，则 UI 上暂时为空
+          final List pointsList = data['points'];
+          final scenes = pointsList.map((item) {
+            final m = item as Map<String, dynamic>;
+            final pointId = m['id']?.toString() ?? '';
+            final pointName = m['name']?.toString() ?? pointId;
+            return SceneData(
+              id: pointId,
+              name: _buildSceneName(pointName, roomName),
+              roomId: m['roomId']?.toString().isNotEmpty == true
+                  ? m['roomId'].toString()
+                  : roomId,
+              roomName: roomName,
+              pointCode: m['code']?.toString() ?? '',
+              location: m['location']?.toString() ?? '',
+            );
+          }).toList();
 
-              // 为了支持最新的“闭环”逻辑，我们在这里尝试请求详情获取最新状态
-              // 注意：这会产生 N+1 次请求，如果场景多可能会慢。
-              // 更好的方式是后端 /scenes 接口直接返回。
-              // 现阶段后端 /scenes 接口未修改返回详情，但 /scenes/{id} 已修改。
-              // 临时方案：前端在此处循环请求详情（数量少时可行）。
-
-              String? latestStatus;
-              bool? hasIssue;
-              try {
-                final detailResp = await _dio.get('/scenes/$id');
-                final detailData = detailResp.data;
-                if (detailData is Map && detailData['success'] == true) {
-                  latestStatus = detailData['latestStatus']?.toString();
-                  hasIssue = detailData['hasIssue'] == true;
-                }
-              } catch (_) {
-                // 详情获取失败忽略
-              }
-
-              return SceneData(
-                id: id, // ObjectID 转 hex 字符串
-                name: m['name']?.toString() ?? '',
-                latestStatus: latestStatus,
-                hasIssue: hasIssue,
-              );
-            }),
-          );
-
-          // 写入本地缓存作为兜底
           await saveScenes(scenes);
           return scenes;
         }
@@ -86,7 +84,6 @@ class SceneService {
       // 最后兜底：返回空列表
       return <SceneData>[];
     } catch (e) {
-      // 网络或解析失败时，走本地缓存兜底
       final prefs = await _prefs;
       final scenesJson = prefs.getString(_scenesKey);
       if (scenesJson != null) {

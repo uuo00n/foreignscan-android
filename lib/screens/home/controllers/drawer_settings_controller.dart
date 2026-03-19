@@ -6,6 +6,8 @@ class DrawerServerSettings {
   final bool isWiredMode;
   final String ip;
   final String portText;
+  final String padId;
+  final String padKey;
   final String lastWirelessIp;
   final String lastWiredIp;
 
@@ -13,6 +15,8 @@ class DrawerServerSettings {
     this.isWiredMode = false,
     this.ip = '',
     this.portText = '',
+    this.padId = '',
+    this.padKey = '',
     this.lastWirelessIp = '',
     this.lastWiredIp = '',
   });
@@ -21,6 +25,8 @@ class DrawerServerSettings {
     bool? isWiredMode,
     String? ip,
     String? portText,
+    String? padId,
+    String? padKey,
     String? lastWirelessIp,
     String? lastWiredIp,
   }) {
@@ -28,6 +34,8 @@ class DrawerServerSettings {
       isWiredMode: isWiredMode ?? this.isWiredMode,
       ip: ip ?? this.ip,
       portText: portText ?? this.portText,
+      padId: padId ?? this.padId,
+      padKey: padKey ?? this.padKey,
       lastWirelessIp: lastWirelessIp ?? this.lastWirelessIp,
       lastWiredIp: lastWiredIp ?? this.lastWiredIp,
     );
@@ -71,6 +79,8 @@ class DrawerSettingsController {
         isWiredMode: config.isWiredMode,
         ip: config.ip ?? '',
         portText: config.port?.toString() ?? '',
+        padId: config.padId ?? '',
+        padKey: config.padKey ?? '',
         lastWirelessIp: config.wirelessIp,
         lastWiredIp: config.wiredIp,
       );
@@ -113,6 +123,8 @@ class DrawerSettingsController {
   Future<DrawerConnectionResult> testConnectionAndPersist({
     required String ipInput,
     required String portInput,
+    required String padIdInput,
+    required String padKeyInput,
     required bool isWiredMode,
   }) async {
     final ip = ipInput.trim();
@@ -122,6 +134,12 @@ class DrawerSettingsController {
       return const DrawerConnectionResult(
         isConnected: false,
         message: '请输入服务器IP和端口',
+      );
+    }
+    if (padIdInput.trim().isEmpty || padKeyInput.trim().isEmpty) {
+      return const DrawerConnectionResult(
+        isConnected: false,
+        message: '请输入 Pad ID 和 Pad Key',
       );
     }
 
@@ -142,6 +160,8 @@ class DrawerSettingsController {
         ip: ip,
         port: port,
         isWiredMode: isWiredMode,
+        padId: padIdInput.trim(),
+        padKey: padKeyInput.trim(),
       );
       await serverConfigService.applyToClients(
         dio: _ref.read(dioProvider),
