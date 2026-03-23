@@ -5,6 +5,7 @@ import 'package:foreignscan/screens/home_page.dart';
 import 'package:foreignscan/screens/camera_screen.dart';
 import 'package:foreignscan/screens/detection_result_screen.dart';
 import 'package:foreignscan/screens/image_upload_screen.dart';
+import 'package:foreignscan/screens/records_page.dart';
 import 'package:foreignscan/screens/settings_screen.dart';
 
 class DetectionResultArguments {
@@ -66,6 +67,12 @@ class AppRouter {
       case AppConstants.routeSettings:
         return MaterialPageRoute(
           builder: (_) => const SettingsScreen(),
+          settings: settings,
+        );
+
+      case AppConstants.routeRecords:
+        return MaterialPageRoute(
+          builder: (_) => const RecordsPage(),
           settings: settings,
         );
 
@@ -139,6 +146,10 @@ class AppRouter {
 
   static void navigateToSettings() {
     navigatorKey.currentState?.pushNamed(AppConstants.routeSettings);
+  }
+
+  static void navigateToRecords() {
+    navigatorKey.currentState?.pushNamed(AppConstants.routeRecords);
   }
 
   static void goBack() {

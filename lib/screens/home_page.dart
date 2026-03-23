@@ -125,10 +125,12 @@ class _HomePageState extends ConsumerState<HomePage> {
         // 中文注释：屏蔽首页的“新建检测”按钮，仅保留“检测结果”入口
         AppBarActions(
           showNewDetection: false,
+          showRecords: true,
           onNewDetectionPressed: () => _startNewInspection(context, ref),
           onDetectionResultsPressed: () => AppRouter.navigateToDetectionResult(
             const DetectionResultArguments(imagePath: '', detectionType: ''),
           ),
+          onRecordsPressed: () => AppRouter.navigateToRecords(),
         ),
       ],
     );

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:foreignscan/core/providers/home_providers.dart';
 import 'package:foreignscan/models/scene_data.dart';
-import 'package:foreignscan/widgets/records_section.dart';
 import 'package:foreignscan/widgets/scene_display.dart';
 import 'package:foreignscan/widgets/scene_selector.dart';
 
@@ -45,69 +44,40 @@ class HomeMainLayout extends StatelessWidget {
   }
 
   Widget _buildWideLayout() {
-    return Column(
-      children: [
-        Expanded(
-          flex: 6,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SceneSelector(
-                  scenes: homeState.scenes,
-                  selectedIndex: homeState.selectedSceneIndex,
-                  onSceneSelected: homeViewModel.selectScene,
-                  panelWidth: 280,
-                ),
-                const SizedBox(width: 16),
-                Expanded(child: _buildSceneDisplay()),
-              ],
-            ),
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SceneSelector(
+            scenes: homeState.scenes,
+            selectedIndex: homeState.selectedSceneIndex,
+            onSceneSelected: homeViewModel.selectScene,
+            panelWidth: 280,
           ),
-        ),
-        RecordsSection(
-          records: homeState.inspectionRecords,
-          currentPage: homeState.currentRecordPage,
-          recordsPerPage: homeState.recordsPerPage,
-          totalPages: homeState.totalPages,
-          onPreviousPage: homeViewModel.previousRecordPage,
-          onNextPage: homeViewModel.nextRecordPage,
-        ),
-      ],
+          const SizedBox(width: 16),
+          Expanded(child: _buildSceneDisplay()),
+        ],
+      ),
     );
   }
 
   Widget _buildMediumLayout() {
-    return Column(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SceneSelector(
-                  scenes: homeState.scenes,
-                  selectedIndex: homeState.selectedSceneIndex,
-                  onSceneSelected: homeViewModel.selectScene,
-                  panelWidth: 240,
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: _buildSceneDisplay()),
-              ],
-            ),
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SceneSelector(
+            scenes: homeState.scenes,
+            selectedIndex: homeState.selectedSceneIndex,
+            onSceneSelected: homeViewModel.selectScene,
+            panelWidth: 240,
           ),
-        ),
-        RecordsSection(
-          records: homeState.inspectionRecords,
-          currentPage: homeState.currentRecordPage,
-          recordsPerPage: homeState.recordsPerPage,
-          totalPages: homeState.totalPages,
-          onPreviousPage: homeViewModel.previousRecordPage,
-          onNextPage: homeViewModel.nextRecordPage,
-        ),
-      ],
+          const SizedBox(width: 12),
+          Expanded(child: _buildSceneDisplay()),
+        ],
+      ),
     );
   }
 
@@ -128,15 +98,6 @@ class HomeMainLayout extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             SizedBox(height: 520, child: _buildSceneDisplay()),
-            const SizedBox(height: 12),
-            RecordsSection(
-              records: homeState.inspectionRecords,
-              currentPage: homeState.currentRecordPage,
-              recordsPerPage: homeState.recordsPerPage,
-              totalPages: homeState.totalPages,
-              onPreviousPage: homeViewModel.previousRecordPage,
-              onNextPage: homeViewModel.nextRecordPage,
-            ),
           ],
         ),
       ),

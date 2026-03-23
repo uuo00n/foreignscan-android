@@ -6,15 +6,19 @@ import 'package:foreignscan/core/theme/app_theme.dart';
 class AppBarActions extends StatelessWidget {
   final bool showNewDetection;
   final bool showDetectionResults;
+  final bool showRecords;
   final VoidCallback? onNewDetectionPressed;
   final VoidCallback? onDetectionResultsPressed;
+  final VoidCallback? onRecordsPressed;
 
   const AppBarActions({
     super.key,
     this.showNewDetection = true,
     this.showDetectionResults = true,
+    this.showRecords = false,
     this.onNewDetectionPressed,
     this.onDetectionResultsPressed,
+    this.onRecordsPressed,
   });
 
   @override
@@ -25,14 +29,18 @@ class AppBarActions extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: ElevatedButton.icon(
-              onPressed: onNewDetectionPressed ?? () => _handleNewDetection(context),
+              onPressed:
+                  onNewDetectionPressed ?? () => _handleNewDetection(context),
               icon: const Icon(Icons.add, size: 18),
               label: const Text('新建检测'),
               style: ElevatedButton.styleFrom(
                 // 中文注释：使用更协调的浅蓝（accentBlueLight）作为“新建检测”的背景色
                 backgroundColor: AppTheme.accentBlueLight,
                 foregroundColor: AppTheme.textInverse,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
               ),
             ),
           ),
@@ -41,19 +49,43 @@ class AppBarActions extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: ElevatedButton.icon(
-              onPressed: onDetectionResultsPressed ?? () => _handleDetectionResults(context),
+              onPressed:
+                  onDetectionResultsPressed ??
+                  () => _handleDetectionResults(context),
               icon: const Icon(Icons.analytics, size: 18),
               label: const Text('检测结果'),
               style: ElevatedButton.styleFrom(
                 // 中文注释：使用靛蓝（accentIndigo）作为“检测结果”的背景色，避免与主色完全一致导致视觉层级混乱
                 backgroundColor: AppTheme.accentIndigo,
                 foregroundColor: AppTheme.textInverse,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
               ),
             ),
           ),
         ],
-        if (showNewDetection || showDetectionResults) const SizedBox(width: 8),
+        if (showRecords) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: ElevatedButton.icon(
+              onPressed: onRecordsPressed ?? () => _handleRecords(context),
+              icon: const Icon(Icons.history_rounded, size: 18),
+              label: const Text('拍摄记录'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentBlueLight,
+                foregroundColor: AppTheme.textInverse,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (showNewDetection || showDetectionResults || showRecords)
+          const SizedBox(width: 8),
       ],
     );
   }
@@ -71,11 +103,12 @@ class AppBarActions extends StatelessWidget {
   void _handleDetectionResults(BuildContext context) {
     // 默认处理：导航到检测结果页面
     AppRouter.navigateToDetectionResult(
-      const DetectionResultArguments(
-        imagePath: '',
-        detectionType: '',
-      ),
+      const DetectionResultArguments(imagePath: '', detectionType: ''),
     );
+  }
+
+  void _handleRecords(BuildContext context) {
+    AppRouter.navigateToRecords();
   }
 }
 
@@ -84,20 +117,14 @@ class AppBarTitle extends StatelessWidget {
   final String title;
   final TextStyle? style;
 
-  const AppBarTitle({
-    super.key,
-    required this.title,
-    this.style,
-  });
+  const AppBarTitle({super.key, required this.title, this.style});
 
   @override
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: style ?? const TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.bold,
-      ),
+      style:
+          style ?? const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
     );
   }
 }
@@ -107,11 +134,7 @@ class AppBarBackButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Color? color;
 
-  const AppBarBackButton({
-    super.key,
-    this.onPressed,
-    this.color,
-  });
+  const AppBarBackButton({super.key, this.onPressed, this.color});
 
   @override
   Widget build(BuildContext context) {
