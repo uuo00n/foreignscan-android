@@ -7,10 +7,10 @@ class AppTheme {
   static const Color errorColor = Color(0xFFD32F2F); // Red
   static const Color warningColor = Color(0xFFFFA000); // Amber
   static const Color successColor = Color(0xFF388E3C); // Green
-  
+
   static const Color accentBlueLight = Color(0xFF42A5F5); // Blue 400
   static const Color accentIndigo = Color(0xFF3949AB); // Indigo 600
-  
+
   static const Color backgroundLight = Color(0xFFF8F9FA); // Very Light Grey
   static const Color backgroundDark = Color(0xFF121212); // Almost Black
   static const Color surfaceLight = Color(0xFFFFFFFF);
@@ -60,9 +60,7 @@ class AppTheme {
           horizontal: AppConstants.paddingLarge,
           vertical: 12,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
@@ -77,9 +75,7 @@ class AppTheme {
           vertical: 12,
         ),
         side: const BorderSide(color: primaryColor, width: 1.5),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
@@ -90,9 +86,7 @@ class AppTheme {
     cardTheme: CardThemeData(
       elevation: 4,
       shadowColor: Colors.black.withValues(alpha: 0.1),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       margin: const EdgeInsets.symmetric(
         horizontal: AppConstants.paddingMedium,
         vertical: AppConstants.paddingSmall,
@@ -105,9 +99,11 @@ class AppTheme {
       ),
       filled: true,
       fillColor: Colors.grey.shade50,
+      prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      suffixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
       contentPadding: const EdgeInsets.symmetric(
         horizontal: AppConstants.paddingMedium,
-        vertical: AppConstants.paddingMedium,
+        vertical: 12,
       ),
     ),
     snackBarTheme: const SnackBarThemeData(
@@ -119,7 +115,7 @@ class AppTheme {
       ),
     ),
   );
-  
+
   static final ThemeData darkTheme = ThemeData(
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(
@@ -173,9 +169,11 @@ class AppTheme {
       ),
       filled: true,
       fillColor: Colors.grey.shade800,
+      prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      suffixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
       contentPadding: const EdgeInsets.symmetric(
         horizontal: AppConstants.paddingMedium,
-        vertical: AppConstants.paddingMedium,
+        vertical: 12,
       ),
     ),
     snackBarTheme: const SnackBarThemeData(

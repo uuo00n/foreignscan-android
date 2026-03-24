@@ -33,17 +33,7 @@ class RecordsPage extends ConsumerWidget {
               onRetry: homeViewModel.refreshData,
             )
           : SafeArea(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: RecordsSection(
-                  records: homeState.inspectionRecords,
-                  currentPage: homeState.currentRecordPage,
-                  recordsPerPage: homeState.recordsPerPage,
-                  totalPages: homeState.totalPages,
-                  onPreviousPage: homeViewModel.previousRecordPage,
-                  onNextPage: homeViewModel.nextRecordPage,
-                ),
-              ),
+              child: RecordsSection(records: homeState.inspectionRecords),
             ),
     );
   }

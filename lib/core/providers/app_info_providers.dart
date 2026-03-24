@@ -6,6 +6,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:foreignscan/config/app_config.dart';
+import 'package:foreignscan/core/providers/app_providers.dart';
 
 /// 获取应用包信息（异步）
 /// - 关键点：使用 package_info_plus 的 PackageInfo.fromPlatform() 读取当前安装包信息
@@ -35,8 +36,11 @@ class SimpleAppInfo {
 /// 将 PackageInfo 转换为 SimpleAppInfo，便于 UI 展示
 final simpleAppInfoProvider = FutureProvider<SimpleAppInfo>((ref) async {
   final pkg = await ref.watch(appPackageInfoProvider.future);
-  // 中文注释：API 基础地址来自配置；便于在“关于”中同时展示当前后端目标地址
-  const apiBaseUrl = NetworkConfig.apiBaseUrl;
+  // 中文注释：优先展示用户当前配置的服务器地址；未配置时再回退到默认地址。
+  final serverConfig = await ref.read(serverConfigServiceProvider).load();
+  final apiBaseUrl = serverConfig.isConfigured
+      ? 'http://${serverConfig.ip}:${serverConfig.port}/api'
+      : NetworkConfig.apiBaseUrl;
   return SimpleAppInfo(
     appName: pkg.appName.isNotEmpty ? pkg.appName : AppConfig.appName,
     version: pkg.version.isNotEmpty ? pkg.version : AppConfig.appVersion,
