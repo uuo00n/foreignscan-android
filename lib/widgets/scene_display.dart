@@ -33,6 +33,7 @@ class SceneDisplay extends StatelessWidget {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
+    final similarityText = _buildSimilarityText(scene);
 
     return Container(
       padding: EdgeInsets.all(20),
@@ -194,6 +195,30 @@ class SceneDisplay extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
               ],
+              if (similarityText != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.successColor.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Text(
+                    similarityText,
+                    style: TextStyle(
+                      color: AppTheme.successColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+              ],
               ElevatedButton.icon(
                 onPressed: onConfirmTransfer,
                 icon: Icon(
@@ -240,6 +265,14 @@ class SceneDisplay extends StatelessWidget {
       return (scene.hasIssue == true) ? '检测未通过' : '检测通过';
     }
     return '待检测';
+  }
+
+  String? _buildSimilarityText(SceneData scene) {
+    final percent = scene.lastSimilarityPercent;
+    if (!scene.lastSimilarityPassed || percent == null) {
+      return null;
+    }
+    return '相似度 ${percent.toStringAsFixed(1)}%';
   }
 
   /// 模板参考图区域

@@ -18,18 +18,10 @@ extension _DetectionResultWidgets on _DetectionResultScreenState {
       return const Center(child: CircularProgressIndicator());
     }
     if (errorMessage != null) {
-      return Center(
-        child: Text(
-          '加载失败：$errorMessage',
-          style: const TextStyle(color: AppTheme.errorColor),
-        ),
-      );
+      return _buildErrorStateCard();
     }
 
-    final isDetailMode =
-        widget.arguments?.imageId != null &&
-        widget.arguments!.imageId!.isNotEmpty;
-    if (isDetailMode) {
+    if (_isDetailMode) {
       final hasDetail =
           (currentResult != null && currentResult!.issues.isNotEmpty) ||
           imageIssues.isNotEmpty;
@@ -57,6 +49,169 @@ extension _DetectionResultWidgets on _DetectionResultScreenState {
       );
     }
     return _buildDetectionListView();
+  }
+
+  Widget _buildErrorStateCard() {
+    final detailText = _normalizeErrorDetail(errorMessage);
+    final isOffline = _isOfflineErrorMessage(errorMessage);
+    final accentColor = isOffline ? AppTheme.warningColor : AppTheme.errorColor;
+    final icon = isOffline
+        ? Icons.wifi_off_rounded
+        : Icons.error_outline_rounded;
+    final title = isOffline ? '当前未连接到网络' : '检测结果加载失败';
+    final message = isOffline
+        ? '无法从服务器获取检测结果，且本地暂无可展示的数据。'
+        : '暂时无法加载检测结果，请稍后重试。';
+    final hint = isOffline
+        ? '连接网络后点击重试，或使用顶部“同步”按钮刷新数据。'
+        : '点击下方按钮重新请求数据，若问题持续存在，请检查服务状态。';
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: _DetectionResultScreenState._statusCardMaxWidth,
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceLight,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: accentColor.withValues(alpha: 0.18)),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.shadowColor,
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Icon(icon, color: accentColor, size: 30),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          message,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            height: 1.5,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.tips_and_updates_outlined,
+                      color: accentColor,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        hint,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (detailText.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                Text(
+                  '详细原因',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: accentColor,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    detailText,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.45,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: _retryCurrentView,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('重试加载'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildDetectionDetailView() {

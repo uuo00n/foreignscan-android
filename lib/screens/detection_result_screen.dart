@@ -47,9 +47,55 @@ class _DetectionResultScreenState extends ConsumerState<DetectionResultScreen> {
   static const double _borderRadius = 4.0;
   static const double _borderWidth = 3.0;
   static const double _paddingSmall = 2.0;
+  static const double _statusCardMaxWidth = 520.0;
 
   void _updateView(VoidCallback updater) {
     setState(updater);
+  }
+
+  bool get _isDetailMode {
+    final imageId = widget.arguments?.imageId;
+    return imageId != null && imageId.isNotEmpty;
+  }
+
+  String? get _currentImageId {
+    final imageId = widget.arguments?.imageId;
+    if (imageId == null || imageId.isEmpty) return null;
+    return imageId;
+  }
+
+  String _normalizeErrorDetail(String? raw) {
+    var text = (raw ?? '').trim();
+    if (text.startsWith('Exception:')) {
+      text = text.substring('Exception:'.length).trim();
+    }
+    return text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  bool _isOfflineErrorMessage(String? raw) {
+    final text = _normalizeErrorDetail(raw).toLowerCase();
+    const offlineMarkers = <String>[
+      'socketexception',
+      'dioexception',
+      'connection failed',
+      'connection error',
+      'connection errored',
+      'network is unreachable',
+      'network+本地均不可用',
+      '网络+本地均不可用',
+      'failed host lookup',
+      'errno = 101',
+    ];
+    return offlineMarkers.any(text.contains);
+  }
+
+  Future<void> _retryCurrentView() async {
+    final imageId = _currentImageId;
+    if (imageId != null) {
+      await _fetchIssuesByImage(imageId);
+      return;
+    }
+    await _fetchDetectionList(forceNetwork: true);
   }
 
   @override

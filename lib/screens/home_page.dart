@@ -10,6 +10,7 @@ import 'package:foreignscan/core/widgets/loading_widget.dart';
 import 'package:foreignscan/core/widgets/error_widget.dart';
 import 'package:foreignscan/core/widgets/app_bar_actions.dart';
 import 'package:foreignscan/core/widgets/dialog_safety.dart';
+import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/widgets/app_drawer.dart';
 import 'package:foreignscan/screens/home/controllers/home_workflow_controller.dart';
 import 'package:foreignscan/screens/home/widgets/home_main_layout.dart';
@@ -318,6 +319,20 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
 
       if (result.success) {
+        final similarity = result.similarity;
+        if (similarity != null) {
+          await ref
+              .read(homeViewModelProvider.notifier)
+              .updateSceneSimilarityStatus(
+                selectedScene.id,
+                passed: true,
+                similarityPercent: HomeWorkflowController.similarityPercent(
+                  similarity.bestScore,
+                ),
+                styleImageId: similarity.bestStyleImageId,
+              );
+        }
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -329,7 +344,26 @@ class _HomePageState extends ConsumerState<HomePage> {
         return;
       }
 
+      if (_hasPointCandidates(result)) {
+        await ref
+            .read(homeViewModelProvider.notifier)
+            .updateSceneSimilarityStatus(selectedScene.id, passed: false);
+        if (!context.mounted) return;
+        await _showPointCandidatesDialog(
+          context,
+          ref,
+          sourceScene: selectedScene,
+          imagePath: selectedScene.capturedImage!,
+          result: result,
+        );
+        return;
+      }
+
       if (_isSimilarityFailure(result)) {
+        await ref
+            .read(homeViewModelProvider.notifier)
+            .updateSceneSimilarityStatus(selectedScene.id, passed: false);
+        if (!context.mounted) return;
         await _showSimilarityFailedDialog(context, ref, result);
         return;
       }
@@ -554,17 +588,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     return false;
   }
 
-  int? _findFirstUncapturedBeforeSelected(HomeState homeState) {
-    final selectedIndex = homeState.selectedSceneIndex;
-    for (var i = 0; i < selectedIndex; i++) {
-      final captured = homeState.scenes[i].capturedImage;
-      if (captured == null || captured.isEmpty) {
-        return i;
-      }
-    }
-    return null;
-  }
-
   void _showCaptureValidationProgressDialog(
     BuildContext context,
     ValueChanged<BuildContext> onDialogReady,
@@ -597,19 +620,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('场景索引异常，请刷新重试'),
-          backgroundColor: AppTheme.warningColor,
-        ),
-      );
-      return;
-    }
-
-    final blockedIndex = _findFirstUncapturedBeforeSelected(homeState);
-    if (blockedIndex != null) {
-      final blockedScene = homeState.scenes[blockedIndex];
-      ref.read(homeViewModelProvider.notifier).selectScene(blockedIndex);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('请先完成场景「${blockedScene.name}」拍摄并通过校验'),
           backgroundColor: AppTheme.warningColor,
         ),
       );
@@ -652,7 +662,22 @@ class _HomePageState extends ConsumerState<HomePage> {
         }
         if (!context.mounted) return;
 
+        if (_hasPointCandidates(validationResult)) {
+          await _showPointCandidatesDialog(
+            context,
+            ref,
+            sourceScene: selectedScene,
+            imagePath: imagePath,
+            result: validationResult,
+          );
+          return;
+        }
+
         if (_isSimilarityFailure(validationResult)) {
+          await ref
+              .read(homeViewModelProvider.notifier)
+              .updateSceneSimilarityStatus(selectedScene.id, passed: false);
+          if (!context.mounted) return;
           await _showSimilarityFailedDialog(context, ref, validationResult);
           return;
         }
@@ -668,33 +693,20 @@ class _HomePageState extends ConsumerState<HomePage> {
 
         final homeViewModel = ref.read(homeViewModelProvider.notifier);
         await homeViewModel.updateSceneImage(selectedScene.id, imagePath);
-
-        if (!context.mounted) return;
-
-        final latestState = ref.read(homeViewModelProvider);
-        final currentIndex = latestState.scenes.indexWhere(
-          (scene) => scene.id == selectedScene.id,
-        );
-        final hasNext =
-            currentIndex >= 0 && currentIndex < latestState.scenes.length - 1;
-        if (hasNext) {
-          ref
-              .read(homeViewModelProvider.notifier)
-              .selectScene(currentIndex + 1);
+        final similarity = validationResult.similarity;
+        if (similarity != null) {
+          await homeViewModel.updateSceneSimilarityStatus(
+            selectedScene.id,
+            passed: true,
+            similarityPercent: HomeWorkflowController.similarityPercent(
+              similarity.bestScore,
+            ),
+            styleImageId: similarity.bestStyleImageId,
+          );
         }
 
-        final successLabel = hasNext ? '场景校验通过，已切换到下一场景' : '场景校验通过，可开始传输';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _buildTransferSuccessMessage(
-                validationResult,
-                successLabel: successLabel,
-              ),
-            ),
-            backgroundColor: AppTheme.successColor,
-          ),
-        );
+        if (!context.mounted) return;
+        await _showMatchSuccessDialog(context, ref, validationResult);
       }
     } catch (e) {
       if (context.mounted) {
@@ -785,7 +797,26 @@ class _HomePageState extends ConsumerState<HomePage> {
         return;
       }
 
+      if (_hasPointCandidates(result)) {
+        await ref
+            .read(homeViewModelProvider.notifier)
+            .updateSceneSimilarityStatus(selectedScene.id, passed: false);
+        if (!context.mounted) return;
+        await _showPointCandidatesDialog(
+          context,
+          ref,
+          sourceScene: selectedScene,
+          imagePath: selectedScene.capturedImage!,
+          result: result,
+        );
+        return;
+      }
+
       if (_isSimilarityFailure(result)) {
+        await ref
+            .read(homeViewModelProvider.notifier)
+            .updateSceneSimilarityStatus(selectedScene.id, passed: false);
+        if (!context.mounted) return;
         await _showSimilarityFailedDialog(context, ref, result);
         return;
       }
@@ -811,6 +842,14 @@ class _HomePageState extends ConsumerState<HomePage> {
     return result.failureType == SceneTransferFailureType.similarityTooLow;
   }
 
+  bool _hasPointCandidates(SceneTransferResult result) {
+    final similarity = result.similarity;
+    return result.failureType ==
+            SceneTransferFailureType.pointCandidatesFound &&
+        similarity != null &&
+        similarity.pointCandidates.isNotEmpty;
+  }
+
   String _buildTransferSuccessMessage(
     SceneTransferResult result, {
     required String successLabel,
@@ -819,9 +858,157 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (similarity == null) {
       return successLabel;
     }
-    final styleId = similarity.bestStyleImageId ?? '未知';
-    final scoreText = similarity.bestScore.toStringAsFixed(3);
-    return '$successLabel（模板ID: $styleId，分数: $scoreText）';
+    final percentText = similarity.bestSimilarityPercent.toStringAsFixed(1);
+    return '$successLabel（匹配成功，相似度 $percentText%）';
+  }
+
+  Future<void> _showMatchSuccessDialog(
+    BuildContext context,
+    WidgetRef ref,
+    SceneTransferResult result,
+  ) async {
+    final similarity = result.similarity;
+    if (similarity == null) {
+      return;
+    }
+
+    final matchedSceneName = similarity.matchedSceneName ?? '当前点位';
+    final percentText = similarity.bestSimilarityPercent.toStringAsFixed(1);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('匹配成功'),
+        content: Text(
+          '已匹配点位：$matchedSceneName\n'
+          '相似度：$percentText%\n'
+          '请提交或重新拍摄。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('稍后处理'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _navigateToCamera(context, ref);
+            },
+            child: const Text('重新拍摄'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _confirmTransfer(context, ref);
+            },
+            child: const Text('提交'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showPointCandidatesDialog(
+    BuildContext context,
+    WidgetRef ref, {
+    required SceneData sourceScene,
+    required String imagePath,
+    required SceneTransferResult result,
+  }) async {
+    final similarity = result.similarity;
+    final candidates =
+        similarity?.pointCandidates ?? const <PointMatchCandidate>[];
+    if (candidates.isEmpty) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('发现匹配点位'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('当前照片与当前点位不一致，请确认匹配到的点位：'),
+              const SizedBox(height: 16),
+              ...candidates.map(
+                (candidate) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(dialogContext).pop();
+                        _handlePointCandidateSelected(
+                          context,
+                          ref,
+                          sourceScene: sourceScene,
+                          imagePath: imagePath,
+                          candidate: candidate,
+                        );
+                      },
+                      child: Text(
+                        '${candidate.sceneName}（相似度 ${candidate.similarityPercent.toStringAsFixed(1)}%）',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _navigateToCamera(context, ref);
+            },
+            child: const Text('重新拍摄'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handlePointCandidateSelected(
+    BuildContext context,
+    WidgetRef ref, {
+    required SceneData sourceScene,
+    required String imagePath,
+    required PointMatchCandidate candidate,
+  }) async {
+    final homeViewModel = ref.read(homeViewModelProvider.notifier);
+    await homeViewModel.reassignSceneImage(
+      fromSceneId: sourceScene.id,
+      toSceneId: candidate.sceneId,
+      imagePath: imagePath,
+    );
+    await homeViewModel.updateSceneSimilarityStatus(
+      candidate.sceneId,
+      passed: true,
+      similarityPercent: candidate.similarityPercent,
+      styleImageId: candidate.styleImageId,
+    );
+    homeViewModel.selectSceneById(candidate.sceneId);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '已切换到点位「${candidate.sceneName}」，相似度 ${candidate.similarityPercent.toStringAsFixed(1)}%，请确认传输或重新拍摄。',
+        ),
+        backgroundColor: AppTheme.successColor,
+      ),
+    );
   }
 
   Future<void> _showSimilarityFailedDialog(
@@ -830,20 +1017,20 @@ class _HomePageState extends ConsumerState<HomePage> {
     SceneTransferResult result,
   ) async {
     final similarity = result.similarity;
-    final styleId = similarity?.bestStyleImageId ?? '未知';
-    final scoreText = similarity?.bestScore.toStringAsFixed(3) ?? '0.000';
-    final thresholdText = HomeWorkflowController.similarityThreshold
-        .toStringAsFixed(2);
+    final matchCount = similarity?.bestGoodMatches ?? 0;
+    final percentText =
+        similarity?.bestSimilarityPercent.toStringAsFixed(1) ?? '0.0';
+    final thresholdText = HomeWorkflowController.similarityThreshold.toString();
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('场景校验未通过'),
+        title: const Text('未匹配点位'),
         content: Text(
-          '当前照片与模板场景相似度过低，请重新拍摄。\n'
-          '最佳模板ID：$styleId\n'
-          '匹配分数：$scoreText\n'
-          '通过阈值：$thresholdText',
+          '当前照片未匹配到有效点位，请重新拍摄。\n'
+          '匹配点数：$matchCount\n'
+          '相似度百分比：$percentText%\n'
+          '通过阈值：$thresholdText 个匹配点',
         ),
         actions: [
           TextButton(

@@ -14,6 +14,9 @@ class SceneData {
   // 新增字段：用于支持最新的检测状态展示（检测闭环）
   String? latestStatus; // "未检测" / "已检测"
   bool? hasIssue; // true: 异常 / false: 合格
+  bool lastSimilarityPassed;
+  double? lastSimilarityPercent;
+  String? lastSimilarityStyleImageId;
 
   SceneData({
     required this.id,
@@ -28,6 +31,9 @@ class SceneData {
     this.isTransferred = false,
     this.latestStatus,
     this.hasIssue,
+    this.lastSimilarityPassed = false,
+    this.lastSimilarityPercent,
+    this.lastSimilarityStyleImageId,
   });
 
   // 从JSON创建
@@ -49,6 +55,11 @@ class SceneData {
       isTransferred: json['isTransferred'] ?? false,
       latestStatus: json['latestStatus'],
       hasIssue: json['hasIssue'],
+      lastSimilarityPassed: json['lastSimilarityPassed'] ?? false,
+      lastSimilarityPercent: (json['lastSimilarityPercent'] as num?)
+          ?.toDouble(),
+      lastSimilarityStyleImageId: json['lastSimilarityStyleImageId']
+          ?.toString(),
     );
   }
 
@@ -73,6 +84,9 @@ class SceneData {
       'isTransferred': isTransferred,
       'latestStatus': latestStatus,
       'hasIssue': hasIssue,
+      'lastSimilarityPassed': lastSimilarityPassed,
+      'lastSimilarityPercent': lastSimilarityPercent,
+      'lastSimilarityStyleImageId': lastSimilarityStyleImageId,
     };
   }
 
@@ -91,11 +105,19 @@ class SceneData {
     String? pointCode,
     String? location,
     String? capturedImage,
+    bool clearCapturedImage = false,
     DateTime? captureTime,
+    bool clearCaptureTime = false,
     DateTime? transferTime,
+    bool clearTransferTime = false,
     bool? isTransferred,
     String? latestStatus,
     bool? hasIssue,
+    bool? lastSimilarityPassed,
+    double? lastSimilarityPercent,
+    bool clearLastSimilarityPercent = false,
+    String? lastSimilarityStyleImageId,
+    bool clearLastSimilarityStyleImageId = false,
   }) {
     return SceneData(
       id: id ?? this.id,
@@ -104,12 +126,23 @@ class SceneData {
       roomName: roomName ?? this.roomName,
       pointCode: pointCode ?? this.pointCode,
       location: location ?? this.location,
-      capturedImage: capturedImage ?? this.capturedImage,
-      captureTime: captureTime ?? this.captureTime,
-      transferTime: transferTime ?? this.transferTime,
+      capturedImage: clearCapturedImage
+          ? null
+          : (capturedImage ?? this.capturedImage),
+      captureTime: clearCaptureTime ? null : (captureTime ?? this.captureTime),
+      transferTime: clearTransferTime
+          ? null
+          : (transferTime ?? this.transferTime),
       isTransferred: isTransferred ?? this.isTransferred,
       latestStatus: latestStatus ?? this.latestStatus,
       hasIssue: hasIssue ?? this.hasIssue,
+      lastSimilarityPassed: lastSimilarityPassed ?? this.lastSimilarityPassed,
+      lastSimilarityPercent: clearLastSimilarityPercent
+          ? null
+          : (lastSimilarityPercent ?? this.lastSimilarityPercent),
+      lastSimilarityStyleImageId: clearLastSimilarityStyleImageId
+          ? null
+          : (lastSimilarityStyleImageId ?? this.lastSimilarityStyleImageId),
     );
   }
 
@@ -133,7 +166,10 @@ class SceneData {
         other.transferTime == transferTime &&
         other.isTransferred == isTransferred &&
         other.latestStatus == latestStatus &&
-        other.hasIssue == hasIssue;
+        other.hasIssue == hasIssue &&
+        other.lastSimilarityPassed == lastSimilarityPassed &&
+        other.lastSimilarityPercent == lastSimilarityPercent &&
+        other.lastSimilarityStyleImageId == lastSimilarityStyleImageId;
   }
 
   @override
@@ -149,6 +185,9 @@ class SceneData {
         transferTime.hashCode ^
         isTransferred.hashCode ^
         latestStatus.hashCode ^
-        hasIssue.hashCode;
+        hasIssue.hashCode ^
+        lastSimilarityPassed.hashCode ^
+        lastSimilarityPercent.hashCode ^
+        lastSimilarityStyleImageId.hashCode;
   }
 }

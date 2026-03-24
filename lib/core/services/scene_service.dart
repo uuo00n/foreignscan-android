@@ -111,6 +111,9 @@ class SceneService {
           return scene.copyWith(
             capturedImage: imagePath,
             captureTime: DateTime.now(), // Set the capture time to now
+            lastSimilarityPassed: false,
+            clearLastSimilarityPercent: true,
+            clearLastSimilarityStyleImageId: true,
           );
         }
         return scene;
@@ -136,6 +139,12 @@ class SceneService {
           return scene.copyWith(
             isTransferred: isTransferred,
             transferTime: isTransferred ? DateTime.now() : null,
+            clearTransferTime: !isTransferred,
+            lastSimilarityPassed: isTransferred
+                ? false
+                : scene.lastSimilarityPassed,
+            clearLastSimilarityPercent: isTransferred,
+            clearLastSimilarityStyleImageId: isTransferred,
           );
         }
         return scene;
@@ -144,6 +153,71 @@ class SceneService {
       await saveScenes(updatedScenes);
     } catch (e) {
       throw Exception('更新场景传输状态失败: $e');
+    }
+  }
+
+  Future<void> reassignSceneImage({
+    required String fromSceneId,
+    required String toSceneId,
+    required String imagePath,
+  }) async {
+    try {
+      final scenes = await getScenes();
+      final now = DateTime.now();
+      final updatedScenes = scenes.map((scene) {
+        if (scene.id == fromSceneId && fromSceneId != toSceneId) {
+          return scene.copyWith(
+            clearCapturedImage: true,
+            clearCaptureTime: true,
+            lastSimilarityPassed: false,
+            clearLastSimilarityPercent: true,
+            clearLastSimilarityStyleImageId: true,
+          );
+        }
+
+        if (scene.id == toSceneId) {
+          return scene.copyWith(
+            capturedImage: imagePath,
+            captureTime: now,
+            lastSimilarityPassed: false,
+            clearLastSimilarityPercent: true,
+            clearLastSimilarityStyleImageId: true,
+          );
+        }
+
+        return scene;
+      }).toList();
+
+      await saveScenes(updatedScenes);
+    } catch (e) {
+      throw Exception('重新分配场景图片失败: $e');
+    }
+  }
+
+  Future<void> updateSceneSimilarityStatus(
+    String sceneId, {
+    required bool passed,
+    double? similarityPercent,
+    String? styleImageId,
+  }) async {
+    try {
+      final scenes = await getScenes();
+      final updatedScenes = scenes.map((scene) {
+        if (scene.id != sceneId) {
+          return scene;
+        }
+        return scene.copyWith(
+          lastSimilarityPassed: passed,
+          lastSimilarityPercent: passed ? similarityPercent : null,
+          clearLastSimilarityPercent: !passed,
+          lastSimilarityStyleImageId: passed ? styleImageId : null,
+          clearLastSimilarityStyleImageId: !passed,
+        );
+      }).toList();
+
+      await saveScenes(updatedScenes);
+    } catch (e) {
+      throw Exception('更新场景相似度状态失败: $e');
     }
   }
 

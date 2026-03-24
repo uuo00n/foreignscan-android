@@ -269,6 +269,13 @@ class HomeViewModel extends StateNotifier<HomeState> {
     }
   }
 
+  void selectSceneById(String sceneId) {
+    final index = state.scenes.indexWhere((scene) => scene.id == sceneId);
+    if (index >= 0) {
+      state = state.copyWith(selectedSceneIndex: index);
+    }
+  }
+
   void nextRecordPage() {
     if (state.currentRecordPage < state.totalPages - 1) {
       state = state.copyWith(currentRecordPage: state.currentRecordPage + 1);
@@ -309,7 +316,13 @@ class HomeViewModel extends StateNotifier<HomeState> {
     try {
       final updatedScenes = state.scenes.map((scene) {
         if (scene.id == sceneId) {
-          return scene.copyWith(capturedImage: imagePath);
+          return scene.copyWith(
+            capturedImage: imagePath,
+            captureTime: DateTime.now(),
+            lastSimilarityPassed: false,
+            clearLastSimilarityPercent: true,
+            clearLastSimilarityStyleImageId: true,
+          );
         }
         return scene;
       }).toList();
@@ -319,6 +332,49 @@ class HomeViewModel extends StateNotifier<HomeState> {
       await _sceneService.updateSceneImage(sceneId, imagePath);
     } catch (e) {
       state = state.copyWith(errorMessage: '更新场景图片失败: $e');
+    }
+  }
+
+  Future<void> reassignSceneImage({
+    required String fromSceneId,
+    required String toSceneId,
+    required String imagePath,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final updatedScenes = state.scenes.map((scene) {
+        if (scene.id == fromSceneId && fromSceneId != toSceneId) {
+          return scene.copyWith(
+            clearCapturedImage: true,
+            clearCaptureTime: true,
+            lastSimilarityPassed: false,
+            clearLastSimilarityPercent: true,
+            clearLastSimilarityStyleImageId: true,
+          );
+        }
+
+        if (scene.id == toSceneId) {
+          return scene.copyWith(
+            capturedImage: imagePath,
+            captureTime: now,
+            lastSimilarityPassed: false,
+            clearLastSimilarityPercent: true,
+            clearLastSimilarityStyleImageId: true,
+          );
+        }
+
+        return scene;
+      }).toList();
+
+      state = state.copyWith(scenes: updatedScenes);
+
+      await _sceneService.reassignSceneImage(
+        fromSceneId: fromSceneId,
+        toSceneId: toSceneId,
+        imagePath: imagePath,
+      );
+    } catch (e) {
+      state = state.copyWith(errorMessage: '重新分配场景图片失败: $e');
     }
   }
 
@@ -334,6 +390,12 @@ class HomeViewModel extends StateNotifier<HomeState> {
           return scene.copyWith(
             isTransferred: isTransferred,
             transferTime: isTransferred ? DateTime.now() : null,
+            clearTransferTime: !isTransferred,
+            lastSimilarityPassed: isTransferred
+                ? false
+                : scene.lastSimilarityPassed,
+            clearLastSimilarityPercent: isTransferred,
+            clearLastSimilarityStyleImageId: isTransferred,
           );
         }
         return scene;
@@ -345,6 +407,39 @@ class HomeViewModel extends StateNotifier<HomeState> {
       await _sceneService.updateSceneTransferStatus(sceneId, isTransferred);
     } catch (e) {
       state = state.copyWith(errorMessage: '更新场景传输状态失败: $e');
+    }
+  }
+
+  Future<void> updateSceneSimilarityStatus(
+    String sceneId, {
+    required bool passed,
+    double? similarityPercent,
+    String? styleImageId,
+  }) async {
+    try {
+      final updatedScenes = state.scenes.map((scene) {
+        if (scene.id != sceneId) {
+          return scene;
+        }
+        return scene.copyWith(
+          lastSimilarityPassed: passed,
+          lastSimilarityPercent: passed ? similarityPercent : null,
+          clearLastSimilarityPercent: !passed,
+          lastSimilarityStyleImageId: passed ? styleImageId : null,
+          clearLastSimilarityStyleImageId: !passed,
+        );
+      }).toList();
+
+      state = state.copyWith(scenes: updatedScenes);
+
+      await _sceneService.updateSceneSimilarityStatus(
+        sceneId,
+        passed: passed,
+        similarityPercent: similarityPercent,
+        styleImageId: styleImageId,
+      );
+    } catch (e) {
+      state = state.copyWith(errorMessage: '更新场景相似度状态失败: $e');
     }
   }
 
