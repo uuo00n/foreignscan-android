@@ -5,19 +5,18 @@
 extern "C" {
 #endif
 
-typedef struct OrbScoreNative {
-  int good_matches;
+typedef struct FeatureScoreNative {
+  int matched_feature_count;
   int keypoints_a;
   int keypoints_b;
-  float similarity;
-  int inlier_count;
-} OrbScoreNative;
+  float similarity_percent;
+} FeatureScoreNative;
 
-int orb_compare_images(const char* captured_path,
+int feature_compare_images(const char* captured_path,
                        const char* reference_path,
-                       int distance_threshold,
+                       double ratio_threshold,
                        int max_features,
-                       OrbScoreNative* out_score);
+                       FeatureScoreNative* out_score);
 
 #ifdef __cplusplus
 }

@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/providers/home_providers.dart';
-import 'package:foreignscan/core/services/orb_ffi_service.dart';
+import 'package:foreignscan/core/services/feature_match_service.dart';
+import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/style_image_service.dart';
 import 'package:foreignscan/models/inspection_record.dart';
 import 'package:foreignscan/models/scene_data.dart';
@@ -25,15 +25,17 @@ class PointMatchCandidate {
   final String sceneId;
   final String sceneName;
   final String? styleImageId;
-  final int goodMatches;
+  final int matchedFeatureCount;
   final double similarityPercent;
+  final String similarityLevel;
 
   const PointMatchCandidate({
     required this.sceneId,
     required this.sceneName,
     required this.styleImageId,
-    required this.goodMatches,
+    required this.matchedFeatureCount,
     required this.similarityPercent,
+    required this.similarityLevel,
   });
 }
 
@@ -42,9 +44,9 @@ class SceneSimilarityResult {
   final String? matchedSceneId;
   final String? matchedSceneName;
   final String? bestStyleImageId;
-  final double bestScore;
-  final int bestGoodMatches;
   final double bestSimilarityPercent;
+  final String bestSimilarityLevel;
+  final int bestMatchedFeatureCount;
   final String reason;
   final SceneTransferFailureType failureType;
   final List<PointMatchCandidate> pointCandidates;
@@ -54,9 +56,9 @@ class SceneSimilarityResult {
     required this.matchedSceneId,
     required this.matchedSceneName,
     required this.bestStyleImageId,
-    required this.bestScore,
-    required this.bestGoodMatches,
     required this.bestSimilarityPercent,
+    required this.bestSimilarityLevel,
+    required this.bestMatchedFeatureCount,
     required this.reason,
     required this.failureType,
     this.pointCandidates = const <PointMatchCandidate>[],
@@ -135,20 +137,18 @@ class SyncDataResult {
 }
 
 class HomeWorkflowController {
-  static const int similarityThreshold = 90;
+  static const double directMatchThreshold = 15.0;
+  static const double minimumMatchThreshold = 0.1;
   static const int _maxCandidateCount = 2;
-  static const int _orbDistanceThreshold = 50;
-  static const int _orbMaxFeatures = 2000;
+  static const double _ratioThreshold = 0.7;
+  static const int _siftMaxFeatures = 2000;
 
   final WidgetRef _ref;
 
   const HomeWorkflowController(this._ref);
 
-  static double similarityPercent(num score) {
-    if (similarityThreshold <= 0) {
-      return 0;
-    }
-    return math.min(100.0, score.toDouble() / similarityThreshold * 100);
+  static String similarityLevel(double similarityPercent) {
+    return FeatureMatchService.similarityLevelForPercent(similarityPercent);
   }
 
   @visibleForTesting
@@ -157,35 +157,61 @@ class HomeWorkflowController {
     PointMatchCandidate? currentPointMatch,
     List<PointMatchCandidate> otherPointMatches = const <PointMatchCandidate>[],
   }) {
+    final currentSimilarityPercent =
+        currentPointMatch?.similarityPercent ?? 0.0;
+    final currentSimilarityLevel =
+        currentPointMatch?.similarityLevel ??
+        similarityLevel(currentSimilarityPercent);
+    final currentMatchedFeatureCount =
+        currentPointMatch?.matchedFeatureCount ?? 0;
+
     if (currentPointMatch != null &&
-        currentPointMatch.goodMatches >= similarityThreshold) {
+        currentSimilarityPercent >= directMatchThreshold) {
       return SceneSimilarityResult(
         passed: true,
         matchedSceneId: currentScene.id,
         matchedSceneName: currentScene.name,
         bestStyleImageId: currentPointMatch.styleImageId,
-        bestScore: currentPointMatch.goodMatches.toDouble(),
-        bestGoodMatches: currentPointMatch.goodMatches,
-        bestSimilarityPercent: currentPointMatch.similarityPercent,
-        reason:
-            '匹配成功，相似度 ${currentPointMatch.similarityPercent.toStringAsFixed(1)}%',
+        bestSimilarityPercent: currentSimilarityPercent,
+        bestSimilarityLevel: currentSimilarityLevel,
+        bestMatchedFeatureCount: currentMatchedFeatureCount,
+        reason: '匹配成功，相似性$currentSimilarityLevel',
         failureType: SceneTransferFailureType.none,
       );
     }
 
-    final filteredCandidates =
-        otherPointMatches
-            .where((candidate) => candidate.goodMatches >= similarityThreshold)
-            .toList()
-          ..sort((a, b) {
-            final matchCompare = b.goodMatches.compareTo(a.goodMatches);
-            if (matchCompare != 0) {
-              return matchCompare;
-            }
-            return a.sceneName.compareTo(b.sceneName);
-          });
+    if (currentPointMatch != null &&
+        currentSimilarityPercent < minimumMatchThreshold) {
+      return SceneSimilarityResult(
+        passed: false,
+        matchedSceneId: currentScene.id,
+        matchedSceneName: currentScene.name,
+        bestStyleImageId: currentPointMatch.styleImageId,
+        bestSimilarityPercent: currentSimilarityPercent,
+        bestSimilarityLevel: currentSimilarityLevel,
+        bestMatchedFeatureCount: currentMatchedFeatureCount,
+        reason: '未匹配点位，请重新拍摄',
+        failureType: SceneTransferFailureType.similarityTooLow,
+      );
+    }
 
-    final topCandidates = filteredCandidates
+    final sortedCandidates = otherPointMatches.toList()
+      ..sort((a, b) {
+        final percentCompare = b.similarityPercent.compareTo(
+          a.similarityPercent,
+        );
+        if (percentCompare != 0) {
+          return percentCompare;
+        }
+        final featureCompare = b.matchedFeatureCount.compareTo(
+          a.matchedFeatureCount,
+        );
+        if (featureCompare != 0) {
+          return featureCompare;
+        }
+        return a.sceneName.compareTo(b.sceneName);
+      });
+    final topCandidates = sortedCandidates
         .take(_maxCandidateCount)
         .toList(growable: false);
     if (topCandidates.isNotEmpty) {
@@ -195,25 +221,23 @@ class HomeWorkflowController {
         matchedSceneId: bestCandidate.sceneId,
         matchedSceneName: bestCandidate.sceneName,
         bestStyleImageId: bestCandidate.styleImageId,
-        bestScore: bestCandidate.goodMatches.toDouble(),
-        bestGoodMatches: bestCandidate.goodMatches,
         bestSimilarityPercent: bestCandidate.similarityPercent,
+        bestSimilarityLevel: bestCandidate.similarityLevel,
+        bestMatchedFeatureCount: bestCandidate.matchedFeatureCount,
         reason: '已匹配到其他点位，请确认点位并提交，或重新拍摄。',
         failureType: SceneTransferFailureType.pointCandidatesFound,
         pointCandidates: topCandidates,
       );
     }
 
-    final fallbackMatches = currentPointMatch?.goodMatches ?? 0;
-    final fallbackPercent = currentPointMatch?.similarityPercent ?? 0.0;
     return SceneSimilarityResult(
       passed: false,
       matchedSceneId: currentScene.id,
       matchedSceneName: currentScene.name,
       bestStyleImageId: currentPointMatch?.styleImageId,
-      bestScore: fallbackMatches.toDouble(),
-      bestGoodMatches: fallbackMatches,
-      bestSimilarityPercent: fallbackPercent,
+      bestSimilarityPercent: currentSimilarityPercent,
+      bestSimilarityLevel: currentSimilarityLevel,
+      bestMatchedFeatureCount: currentMatchedFeatureCount,
       reason: '未匹配点位，请重新拍摄',
       failureType: SceneTransferFailureType.similarityTooLow,
     );
@@ -259,9 +283,9 @@ class HomeWorkflowController {
         matchedSceneId: null,
         matchedSceneName: null,
         bestStyleImageId: null,
-        bestScore: 0,
-        bestGoodMatches: 0,
         bestSimilarityPercent: 0,
+        bestSimilarityLevel: '极低',
+        bestMatchedFeatureCount: 0,
         reason: '请先拍摄该场景',
         failureType: SceneTransferFailureType.noCapturedImage,
       );
@@ -274,9 +298,9 @@ class HomeWorkflowController {
         matchedSceneId: null,
         matchedSceneName: null,
         bestStyleImageId: null,
-        bestScore: 0,
-        bestGoodMatches: 0,
         bestSimilarityPercent: 0,
+        bestSimilarityLevel: '极低',
+        bestMatchedFeatureCount: 0,
         reason: '拍摄图不存在：$imagePath',
         failureType: SceneTransferFailureType.noCapturedImage,
       );
@@ -289,25 +313,25 @@ class HomeWorkflowController {
         matchedSceneId: null,
         matchedSceneName: null,
         bestStyleImageId: null,
-        bestScore: 0,
-        bestGoodMatches: 0,
         bestSimilarityPercent: 0,
+        bestSimilarityLevel: '极低',
+        bestMatchedFeatureCount: 0,
         reason: '当前场景没有可用的模板参考图，无法校验，请先同步样式图。',
         failureType: SceneTransferFailureType.noReferenceImages,
       );
     }
 
-    final orbService = _tryGetOrbFfiService();
-    if (orbService == null) {
+    final matchService = _tryGetFeatureMatchService();
+    if (matchService == null) {
       return const SceneSimilarityResult(
         passed: false,
         matchedSceneId: null,
         matchedSceneName: null,
         bestStyleImageId: null,
-        bestScore: 0,
-        bestGoodMatches: 0,
         bestSimilarityPercent: 0,
-        reason: '当前设备未启用 ORB 原生校验能力（仅支持 Android）。',
+        bestSimilarityLevel: '极低',
+        bestMatchedFeatureCount: 0,
+        reason: '当前设备未启用 SIFT 原生校验能力（仅支持 Android）。',
         failureType: SceneTransferFailureType.nativeUnavailable,
       );
     }
@@ -316,7 +340,7 @@ class HomeWorkflowController {
       scene: scene,
       imagePath: imagePath,
       referenceCandidates: currentSceneReferences,
-      orbService: orbService,
+      matchService: matchService,
     );
     if (currentPointComparison.successfulComparisons == 0 ||
         currentPointComparison.match == null) {
@@ -325,16 +349,26 @@ class HomeWorkflowController {
         matchedSceneId: null,
         matchedSceneName: null,
         bestStyleImageId: null,
-        bestScore: 0,
-        bestGoodMatches: 0,
         bestSimilarityPercent: 0,
-        reason: '未能完成有效的 ORB 比对，请检查参考图与拍摄图是否可读。',
+        bestSimilarityLevel: '极低',
+        bestMatchedFeatureCount: 0,
+        reason: '未能完成有效的 SIFT 比对，请检查参考图与拍摄图是否可读。',
         failureType: SceneTransferFailureType.nativeUnavailable,
       );
     }
 
+    if (currentPointComparison.match!.similarityPercent <
+        minimumMatchThreshold) {
+      return decideSceneMatch(
+        currentScene: scene,
+        currentPointMatch: currentPointComparison.match,
+      );
+    }
+
     final otherPointMatches = <PointMatchCandidate>[];
-    for (final peerScene in _findOtherScenesInSameRoom(scene)) {
+    for (final peerScene in await _loadCandidateScenes(
+      currentSceneId: scene.id,
+    )) {
       final peerReferences = await _loadReferenceCandidates(peerScene.id);
       if (peerReferences.isEmpty) {
         continue;
@@ -344,7 +378,7 @@ class HomeWorkflowController {
         scene: peerScene,
         imagePath: imagePath,
         referenceCandidates: peerReferences,
-        orbService: orbService,
+        matchService: matchService,
       );
       if (peerComparison.match != null) {
         otherPointMatches.add(peerComparison.match!);
@@ -430,7 +464,9 @@ class HomeWorkflowController {
     required SceneData scene,
     required bool persistResult,
   }) async {
-    final similarity = await validateSceneSimilarity(scene);
+    final similarity =
+        _buildCachedConfirmedSimilarity(scene) ??
+        await validateSceneSimilarity(scene);
     if (!similarity.passed) {
       return SceneTransferResult.failure(
         similarity.reason,
@@ -481,16 +517,40 @@ class HomeWorkflowController {
     }
   }
 
-  OrbFfiService? _tryGetOrbFfiService() {
+  FeatureMatchService? _tryGetFeatureMatchService() {
     try {
-      return _ref.read(orbFfiServiceProvider);
+      return _ref.read(featureMatchServiceProvider);
     } on UnsupportedError catch (e) {
-      _ref.read(loggerProvider).w('ORB service unsupported: $e');
+      _ref.read(loggerProvider).w('Feature match service unsupported: $e');
       return null;
     } catch (e) {
-      _ref.read(loggerProvider).w('ORB service init failed: $e');
+      _ref.read(loggerProvider).w('Feature match service init failed: $e');
       return null;
     }
+  }
+
+  SceneSimilarityResult? _buildCachedConfirmedSimilarity(SceneData scene) {
+    if (!scene.lastSimilarityPassed) {
+      return null;
+    }
+
+    final similarityPercent = scene.lastSimilarityPercent;
+    final similarityLevel = scene.lastSimilarityLevel;
+    if (similarityPercent == null || similarityLevel == null) {
+      return null;
+    }
+
+    return SceneSimilarityResult(
+      passed: true,
+      matchedSceneId: scene.id,
+      matchedSceneName: scene.name,
+      bestStyleImageId: scene.lastSimilarityStyleImageId,
+      bestSimilarityPercent: similarityPercent,
+      bestSimilarityLevel: similarityLevel,
+      bestMatchedFeatureCount: 0,
+      reason: '匹配成功，相似性$similarityLevel',
+      failureType: SceneTransferFailureType.none,
+    );
   }
 
   Future<List<_ReferenceCandidate>> _loadReferenceCandidates(
@@ -538,18 +598,18 @@ class HomeWorkflowController {
     required SceneData scene,
     required String imagePath,
     required List<_ReferenceCandidate> referenceCandidates,
-    required OrbFfiService orbService,
+    required FeatureMatchService matchService,
   }) async {
     PointMatchCandidate? bestMatch;
     var successfulComparisons = 0;
 
     for (final candidate in referenceCandidates) {
       try {
-        final score = await orbService.comparePairAsync(
+        final score = await matchService.comparePairAsync(
           capturedPath: imagePath,
           referencePath: candidate.localPath,
-          distanceThreshold: _orbDistanceThreshold,
-          maxFeatures: _orbMaxFeatures,
+          ratioThreshold: _ratioThreshold,
+          maxFeatures: _siftMaxFeatures,
         );
         successfulComparisons += 1;
 
@@ -557,25 +617,29 @@ class HomeWorkflowController {
           sceneId: scene.id,
           sceneName: scene.name,
           styleImageId: candidate.styleImageId,
-          goodMatches: score.goodMatches,
-          similarityPercent: similarityPercent(score.goodMatches),
+          matchedFeatureCount: score.matchedFeatureCount,
+          similarityPercent: score.similarityPercent,
+          similarityLevel: score.similarityLevel,
         );
 
         if (bestMatch == null ||
-            pointMatch.goodMatches > bestMatch.goodMatches) {
+            pointMatch.similarityPercent > bestMatch.similarityPercent ||
+            (pointMatch.similarityPercent == bestMatch.similarityPercent &&
+                pointMatch.matchedFeatureCount >
+                    bestMatch.matchedFeatureCount)) {
           bestMatch = pointMatch;
         }
-      } on OrbFfiException catch (e) {
+      } on FeatureMatchException catch (e) {
         _ref
             .read(loggerProvider)
             .w(
-              'ORB compare failed, scene=${scene.id}, style=${candidate.styleImageId}, error=$e',
+              'Feature compare failed, scene=${scene.id}, style=${candidate.styleImageId}, error=$e',
             );
       } catch (e) {
         _ref
             .read(loggerProvider)
             .w(
-              'ORB compare unexpected error, scene=${scene.id}, style=${candidate.styleImageId}, error=$e',
+              'Feature compare unexpected error, scene=${scene.id}, style=${candidate.styleImageId}, error=$e',
             );
       }
     }
@@ -586,34 +650,32 @@ class HomeWorkflowController {
     );
   }
 
-  List<SceneData> _findOtherScenesInSameRoom(SceneData currentScene) {
-    final scenes = _ref.read(homeViewModelProvider).scenes;
-    return scenes
-        .where(
-          (scene) =>
-              scene.id != currentScene.id &&
-              _isSameRoom(currentScene: currentScene, targetScene: scene),
-        )
-        .toList();
-  }
-
-  bool _isSameRoom({
-    required SceneData currentScene,
-    required SceneData targetScene,
-  }) {
-    final currentRoomId = currentScene.roomId.trim();
-    final targetRoomId = targetScene.roomId.trim();
-    if (currentRoomId.isNotEmpty && targetRoomId.isNotEmpty) {
-      return currentRoomId == targetRoomId;
+  Future<List<SceneData>> _loadCandidateScenes({
+    required String currentSceneId,
+  }) async {
+    try {
+      final scenes = await _ref
+          .read(sceneServiceProvider)
+          .getAllScenesForMatching();
+      final seenSceneIds = <String>{};
+      return scenes
+          .where(
+            (scene) => scene.id != currentSceneId && seenSceneIds.add(scene.id),
+          )
+          .toList();
+    } catch (e) {
+      _ref
+          .read(loggerProvider)
+          .w('Load candidate scenes failed, fallback to local state: $e');
+      final seenSceneIds = <String>{};
+      return _ref
+          .read(homeViewModelProvider)
+          .scenes
+          .where(
+            (scene) => scene.id != currentSceneId && seenSceneIds.add(scene.id),
+          )
+          .toList();
     }
-
-    final currentRoomName = currentScene.roomName.trim();
-    final targetRoomName = targetScene.roomName.trim();
-    if (currentRoomName.isNotEmpty && targetRoomName.isNotEmpty) {
-      return currentRoomName == targetRoomName;
-    }
-
-    return false;
   }
 
   Future<void> _persistTransferResult({

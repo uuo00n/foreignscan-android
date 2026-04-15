@@ -16,6 +16,7 @@ class SceneData {
   bool? hasIssue; // true: 异常 / false: 合格
   bool lastSimilarityPassed;
   double? lastSimilarityPercent;
+  String? lastSimilarityLevel;
   String? lastSimilarityStyleImageId;
 
   SceneData({
@@ -33,6 +34,7 @@ class SceneData {
     this.hasIssue,
     this.lastSimilarityPassed = false,
     this.lastSimilarityPercent,
+    this.lastSimilarityLevel,
     this.lastSimilarityStyleImageId,
   });
 
@@ -58,6 +60,7 @@ class SceneData {
       lastSimilarityPassed: json['lastSimilarityPassed'] ?? false,
       lastSimilarityPercent: (json['lastSimilarityPercent'] as num?)
           ?.toDouble(),
+      lastSimilarityLevel: json['lastSimilarityLevel']?.toString(),
       lastSimilarityStyleImageId: json['lastSimilarityStyleImageId']
           ?.toString(),
     );
@@ -86,6 +89,7 @@ class SceneData {
       'hasIssue': hasIssue,
       'lastSimilarityPassed': lastSimilarityPassed,
       'lastSimilarityPercent': lastSimilarityPercent,
+      'lastSimilarityLevel': lastSimilarityLevel,
       'lastSimilarityStyleImageId': lastSimilarityStyleImageId,
     };
   }
@@ -116,6 +120,8 @@ class SceneData {
     bool? lastSimilarityPassed,
     double? lastSimilarityPercent,
     bool clearLastSimilarityPercent = false,
+    String? lastSimilarityLevel,
+    bool clearLastSimilarityLevel = false,
     String? lastSimilarityStyleImageId,
     bool clearLastSimilarityStyleImageId = false,
   }) {
@@ -140,6 +146,9 @@ class SceneData {
       lastSimilarityPercent: clearLastSimilarityPercent
           ? null
           : (lastSimilarityPercent ?? this.lastSimilarityPercent),
+      lastSimilarityLevel: clearLastSimilarityLevel
+          ? null
+          : (lastSimilarityLevel ?? this.lastSimilarityLevel),
       lastSimilarityStyleImageId: clearLastSimilarityStyleImageId
           ? null
           : (lastSimilarityStyleImageId ?? this.lastSimilarityStyleImageId),
@@ -169,6 +178,7 @@ class SceneData {
         other.hasIssue == hasIssue &&
         other.lastSimilarityPassed == lastSimilarityPassed &&
         other.lastSimilarityPercent == lastSimilarityPercent &&
+        other.lastSimilarityLevel == lastSimilarityLevel &&
         other.lastSimilarityStyleImageId == lastSimilarityStyleImageId;
   }
 
@@ -188,6 +198,7 @@ class SceneData {
         hasIssue.hashCode ^
         lastSimilarityPassed.hashCode ^
         lastSimilarityPercent.hashCode ^
+        lastSimilarityLevel.hashCode ^
         lastSimilarityStyleImageId.hashCode;
   }
 }

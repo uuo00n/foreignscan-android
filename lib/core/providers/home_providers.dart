@@ -321,6 +321,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
             captureTime: DateTime.now(),
             lastSimilarityPassed: false,
             clearLastSimilarityPercent: true,
+            clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
           );
         }
@@ -349,6 +350,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
             clearCaptureTime: true,
             lastSimilarityPassed: false,
             clearLastSimilarityPercent: true,
+            clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
           );
         }
@@ -359,6 +361,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
             captureTime: now,
             lastSimilarityPassed: false,
             clearLastSimilarityPercent: true,
+            clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
           );
         }
@@ -395,6 +398,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
                 ? false
                 : scene.lastSimilarityPassed,
             clearLastSimilarityPercent: isTransferred,
+            clearLastSimilarityLevel: isTransferred,
             clearLastSimilarityStyleImageId: isTransferred,
           );
         }
@@ -414,6 +418,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
     String sceneId, {
     required bool passed,
     double? similarityPercent,
+    String? similarityLevel,
     String? styleImageId,
   }) async {
     try {
@@ -425,6 +430,8 @@ class HomeViewModel extends StateNotifier<HomeState> {
           lastSimilarityPassed: passed,
           lastSimilarityPercent: passed ? similarityPercent : null,
           clearLastSimilarityPercent: !passed,
+          lastSimilarityLevel: passed ? similarityLevel : null,
+          clearLastSimilarityLevel: !passed,
           lastSimilarityStyleImageId: passed ? styleImageId : null,
           clearLastSimilarityStyleImageId: !passed,
         );
@@ -436,6 +443,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
         sceneId,
         passed: passed,
         similarityPercent: similarityPercent,
+        similarityLevel: similarityLevel,
         styleImageId: styleImageId,
       );
     } catch (e) {

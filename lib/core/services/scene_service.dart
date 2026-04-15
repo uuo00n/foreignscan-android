@@ -16,6 +16,7 @@ class SceneService {
   final Future<SharedPreferences> _prefs;
   final Dio _dio;
   static const String _scenesKey = 'scenes';
+  static const String _matchingScenesKey = 'matching_scenes';
 
   SceneService(this._prefs, this._dio);
 
@@ -27,17 +28,82 @@ class SceneService {
     return '$r / $p';
   }
 
+  Future<Map<String, String>> _buildPadHeaders() async {
+    final prefs = await _prefs;
+    final padId = (prefs.getString('pad_id') ?? '').trim();
+    final padKey = (prefs.getString('pad_key') ?? '').trim();
+    final headers = <String, String>{};
+    if (padId.isNotEmpty && padKey.isNotEmpty) {
+      headers['X-Pad-Id'] = padId;
+      headers['X-Pad-Key'] = padKey;
+    }
+    return headers;
+  }
+
+  SceneData _mapSceneItem(
+    Map<String, dynamic> raw, {
+    String fallbackRoomId = '',
+    String fallbackRoomName = '',
+  }) {
+    final room = raw['room'];
+    final roomMap = room is Map ? room : null;
+    final roomId =
+        raw['roomId']?.toString() ??
+        roomMap?['id']?.toString() ??
+        fallbackRoomId;
+    final roomName =
+        raw['roomName']?.toString() ??
+        roomMap?['name']?.toString() ??
+        fallbackRoomName;
+    final pointId = raw['id']?.toString() ?? raw['pointId']?.toString() ?? '';
+    final pointName =
+        raw['name']?.toString() ?? raw['pointName']?.toString() ?? pointId;
+
+    return SceneData(
+      id: pointId,
+      name: _buildSceneName(pointName, roomName),
+      roomId: roomId,
+      roomName: roomName,
+      pointCode: raw['code']?.toString() ?? '',
+      location: raw['location']?.toString() ?? '',
+    );
+  }
+
+  List<SceneData> _parseSceneList(
+    dynamic data, {
+    String fallbackRoomId = '',
+    String fallbackRoomName = '',
+  }) {
+    List<dynamic> items = const <dynamic>[];
+    if (data is List) {
+      items = data;
+    } else if (data is Map) {
+      if (data['points'] is List) {
+        items = data['points'] as List<dynamic>;
+      } else if (data['scenes'] is List) {
+        items = data['scenes'] as List<dynamic>;
+      } else if (data['data'] is List) {
+        items = data['data'] as List<dynamic>;
+      }
+    }
+
+    return items
+        .whereType<Map>()
+        .map(
+          (item) => _mapSceneItem(
+            Map<String, dynamic>.from(item),
+            fallbackRoomId: fallbackRoomId,
+            fallbackRoomName: fallbackRoomName,
+          ),
+        )
+        .where((scene) => scene.id.isNotEmpty)
+        .toList();
+  }
+
   Future<List<SceneData>> getScenes({bool forceOffline = false}) async {
     try {
       if (!forceOffline) {
-        final prefs = await _prefs;
-        final padId = (prefs.getString('pad_id') ?? '').trim();
-        final padKey = (prefs.getString('pad_key') ?? '').trim();
-        final headers = <String, String>{};
-        if (padId.isNotEmpty && padKey.isNotEmpty) {
-          headers['X-Pad-Id'] = padId;
-          headers['X-Pad-Key'] = padKey;
-        }
+        final headers = await _buildPadHeaders();
         final response = await _dio.get(
           '/pad/room-context',
           options: Options(headers: headers),
@@ -51,23 +117,11 @@ class SceneService {
           final room = data['room'] as Map;
           final roomId = room['id']?.toString() ?? '';
           final roomName = room['name']?.toString() ?? roomId;
-
-          final List pointsList = data['points'];
-          final scenes = pointsList.map((item) {
-            final m = item as Map<String, dynamic>;
-            final pointId = m['id']?.toString() ?? '';
-            final pointName = m['name']?.toString() ?? pointId;
-            return SceneData(
-              id: pointId,
-              name: _buildSceneName(pointName, roomName),
-              roomId: m['roomId']?.toString().isNotEmpty == true
-                  ? m['roomId'].toString()
-                  : roomId,
-              roomName: roomName,
-              pointCode: m['code']?.toString() ?? '',
-              location: m['location']?.toString() ?? '',
-            );
-          }).toList();
+          final scenes = _parseSceneList(
+            data['points'],
+            fallbackRoomId: roomId,
+            fallbackRoomName: roomName,
+          );
 
           await saveScenes(scenes);
           return scenes;
@@ -93,6 +147,44 @@ class SceneService {
     }
   }
 
+  Future<List<SceneData>> getAllScenesForMatching({
+    bool forceOffline = false,
+  }) async {
+    try {
+      if (!forceOffline) {
+        final headers = await _buildPadHeaders();
+        final response = await _dio.get(
+          '/scenes',
+          options: Options(headers: headers),
+        );
+        final scenes = _parseSceneList(response.data);
+        if (scenes.isNotEmpty) {
+          final prefs = await _prefs;
+          await prefs.setString(
+            _matchingScenesKey,
+            SceneData.toJsonList(scenes),
+          );
+          return scenes;
+        }
+      }
+
+      final prefs = await _prefs;
+      final cachedScenes = prefs.getString(_matchingScenesKey);
+      if (cachedScenes != null && cachedScenes.isNotEmpty) {
+        return SceneData.fromJsonList(cachedScenes);
+      }
+
+      return await getScenes(forceOffline: true);
+    } catch (e) {
+      final prefs = await _prefs;
+      final cachedScenes = prefs.getString(_matchingScenesKey);
+      if (cachedScenes != null && cachedScenes.isNotEmpty) {
+        return SceneData.fromJsonList(cachedScenes);
+      }
+      return await getScenes(forceOffline: true);
+    }
+  }
+
   Future<void> saveScenes(List<SceneData> scenes) async {
     try {
       final prefs = await _prefs;
@@ -113,6 +205,7 @@ class SceneService {
             captureTime: DateTime.now(), // Set the capture time to now
             lastSimilarityPassed: false,
             clearLastSimilarityPercent: true,
+            clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
           );
         }
@@ -144,6 +237,7 @@ class SceneService {
                 ? false
                 : scene.lastSimilarityPassed,
             clearLastSimilarityPercent: isTransferred,
+            clearLastSimilarityLevel: isTransferred,
             clearLastSimilarityStyleImageId: isTransferred,
           );
         }
@@ -171,6 +265,7 @@ class SceneService {
             clearCaptureTime: true,
             lastSimilarityPassed: false,
             clearLastSimilarityPercent: true,
+            clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
           );
         }
@@ -181,6 +276,7 @@ class SceneService {
             captureTime: now,
             lastSimilarityPassed: false,
             clearLastSimilarityPercent: true,
+            clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
           );
         }
@@ -198,6 +294,7 @@ class SceneService {
     String sceneId, {
     required bool passed,
     double? similarityPercent,
+    String? similarityLevel,
     String? styleImageId,
   }) async {
     try {
@@ -210,6 +307,8 @@ class SceneService {
           lastSimilarityPassed: passed,
           lastSimilarityPercent: passed ? similarityPercent : null,
           clearLastSimilarityPercent: !passed,
+          lastSimilarityLevel: passed ? similarityLevel : null,
+          clearLastSimilarityLevel: !passed,
           lastSimilarityStyleImageId: passed ? styleImageId : null,
           clearLastSimilarityStyleImageId: !passed,
         );

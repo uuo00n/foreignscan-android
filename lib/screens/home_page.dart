@@ -326,9 +326,8 @@ class _HomePageState extends ConsumerState<HomePage> {
               .updateSceneSimilarityStatus(
                 selectedScene.id,
                 passed: true,
-                similarityPercent: HomeWorkflowController.similarityPercent(
-                  similarity.bestScore,
-                ),
+                similarityPercent: similarity.bestSimilarityPercent,
+                similarityLevel: similarity.bestSimilarityLevel,
                 styleImageId: similarity.bestStyleImageId,
               );
         }
@@ -698,9 +697,8 @@ class _HomePageState extends ConsumerState<HomePage> {
           await homeViewModel.updateSceneSimilarityStatus(
             selectedScene.id,
             passed: true,
-            similarityPercent: HomeWorkflowController.similarityPercent(
-              similarity.bestScore,
-            ),
+            similarityPercent: similarity.bestSimilarityPercent,
+            similarityLevel: similarity.bestSimilarityLevel,
             styleImageId: similarity.bestStyleImageId,
           );
         }
@@ -858,8 +856,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (similarity == null) {
       return successLabel;
     }
-    final percentText = similarity.bestSimilarityPercent.toStringAsFixed(1);
-    return '$successLabel（匹配成功，相似度 $percentText%）';
+    return '$successLabel（匹配成功，相似性${similarity.bestSimilarityLevel}）';
   }
 
   Future<void> _showMatchSuccessDialog(
@@ -873,7 +870,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     final matchedSceneName = similarity.matchedSceneName ?? '当前点位';
-    final percentText = similarity.bestSimilarityPercent.toStringAsFixed(1);
+    final similarityLevel = similarity.bestSimilarityLevel;
 
     await showDialog<void>(
       context: context,
@@ -881,7 +878,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         title: const Text('匹配成功'),
         content: Text(
           '已匹配点位：$matchedSceneName\n'
-          '相似度：$percentText%\n'
+          '相似性：$similarityLevel\n'
           '请提交或重新拍摄。',
         ),
         actions: [
@@ -950,7 +947,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         );
                       },
                       child: Text(
-                        '${candidate.sceneName}（相似度 ${candidate.similarityPercent.toStringAsFixed(1)}%）',
+                        '${candidate.sceneName}（相似性${candidate.similarityLevel}）',
                       ),
                     ),
                   ),
@@ -993,6 +990,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       candidate.sceneId,
       passed: true,
       similarityPercent: candidate.similarityPercent,
+      similarityLevel: candidate.similarityLevel,
       styleImageId: candidate.styleImageId,
     );
     homeViewModel.selectSceneById(candidate.sceneId);
@@ -1004,7 +1002,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '已切换到点位「${candidate.sceneName}」，相似度 ${candidate.similarityPercent.toStringAsFixed(1)}%，请确认传输或重新拍摄。',
+          '已切换到点位「${candidate.sceneName}」，相似性${candidate.similarityLevel}，请确认传输或重新拍摄。',
         ),
         backgroundColor: AppTheme.successColor,
       ),
@@ -1016,22 +1014,11 @@ class _HomePageState extends ConsumerState<HomePage> {
     WidgetRef ref,
     SceneTransferResult result,
   ) async {
-    final similarity = result.similarity;
-    final matchCount = similarity?.bestGoodMatches ?? 0;
-    final percentText =
-        similarity?.bestSimilarityPercent.toStringAsFixed(1) ?? '0.0';
-    final thresholdText = HomeWorkflowController.similarityThreshold.toString();
-
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('未匹配点位'),
-        content: Text(
-          '当前照片未匹配到有效点位，请重新拍摄。\n'
-          '匹配点数：$matchCount\n'
-          '相似度百分比：$percentText%\n'
-          '通过阈值：$thresholdText 个匹配点',
-        ),
+        content: const Text('当前照片未匹配到有效点位，请重新拍摄。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),

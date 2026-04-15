@@ -11,56 +11,62 @@ void main() {
       roomName: '场景A',
     );
 
-    test('当前点位 goodMatches 达阈值时直接返回匹配成功', () {
+    test('当前点位相似度达到 15.0% 时直接返回匹配成功', () {
       final result = HomeWorkflowController.decideSceneMatch(
         currentScene: currentScene,
         currentPointMatch: PointMatchCandidate(
           sceneId: 'point-1',
           sceneName: '场景A / 点位1',
           styleImageId: 'style-1',
-          goodMatches: 95,
-          similarityPercent: HomeWorkflowController.similarityPercent(95),
+          matchedFeatureCount: 36,
+          similarityPercent: 18.4,
+          similarityLevel: '极高',
         ),
       );
 
       expect(result.passed, isTrue);
       expect(result.failureType, SceneTransferFailureType.none);
-      expect(result.bestGoodMatches, 95);
-      expect(result.bestSimilarityPercent, 100);
+      expect(result.bestSimilarityPercent, 18.4);
+      expect(result.bestSimilarityLevel, '极高');
+      expect(result.bestMatchedFeatureCount, 36);
       expect(result.pointCandidates, isEmpty);
     });
 
-    test('当前点位不通过且其他点位有多个达标时返回前两个候选', () {
+    test('当前点位低于 15.0% 时继续返回全图库最相似前两个候选', () {
       final result = HomeWorkflowController.decideSceneMatch(
         currentScene: currentScene,
         currentPointMatch: PointMatchCandidate(
           sceneId: 'point-1',
           sceneName: '场景A / 点位1',
           styleImageId: 'style-1',
-          goodMatches: 65,
-          similarityPercent: HomeWorkflowController.similarityPercent(65),
+          matchedFeatureCount: 20,
+          similarityPercent: 12.6,
+          similarityLevel: '高',
         ),
         otherPointMatches: [
           PointMatchCandidate(
             sceneId: 'point-2',
             sceneName: '场景A / 点位2',
             styleImageId: 'style-2',
-            goodMatches: 110,
-            similarityPercent: HomeWorkflowController.similarityPercent(110),
+            matchedFeatureCount: 25,
+            similarityPercent: 14.8,
+            similarityLevel: '高',
           ),
           PointMatchCandidate(
             sceneId: 'point-3',
             sceneName: '场景A / 点位3',
             styleImageId: 'style-3',
-            goodMatches: 92,
-            similarityPercent: HomeWorkflowController.similarityPercent(92),
+            matchedFeatureCount: 18,
+            similarityPercent: 9.9,
+            similarityLevel: '较低',
           ),
           PointMatchCandidate(
             sceneId: 'point-4',
             sceneName: '场景A / 点位4',
             styleImageId: 'style-4',
-            goodMatches: 105,
-            similarityPercent: HomeWorkflowController.similarityPercent(105),
+            matchedFeatureCount: 24,
+            similarityPercent: 13.5,
+            similarityLevel: '高',
           ),
         ],
       );
@@ -70,32 +76,28 @@ void main() {
       expect(result.pointCandidates.length, 2);
       expect(result.pointCandidates[0].sceneId, 'point-2');
       expect(result.pointCandidates[1].sceneId, 'point-4');
+      expect(result.bestSimilarityLevel, '高');
     });
 
-    test('当前点位不通过且仅一个其他点位达标时返回一个候选', () {
+    test('当前点位未直通但图库仅一个候选时返回一个候选', () {
       final result = HomeWorkflowController.decideSceneMatch(
         currentScene: currentScene,
         currentPointMatch: PointMatchCandidate(
           sceneId: 'point-1',
           sceneName: '场景A / 点位1',
           styleImageId: 'style-1',
-          goodMatches: 70,
-          similarityPercent: HomeWorkflowController.similarityPercent(70),
+          matchedFeatureCount: 11,
+          similarityPercent: 10.5,
+          similarityLevel: '高',
         ),
         otherPointMatches: [
           PointMatchCandidate(
             sceneId: 'point-2',
             sceneName: '场景A / 点位2',
             styleImageId: 'style-2',
-            goodMatches: 93,
-            similarityPercent: HomeWorkflowController.similarityPercent(93),
-          ),
-          PointMatchCandidate(
-            sceneId: 'point-3',
-            sceneName: '场景A / 点位3',
-            styleImageId: 'style-3',
-            goodMatches: 45,
-            similarityPercent: HomeWorkflowController.similarityPercent(45),
+            matchedFeatureCount: 16,
+            similarityPercent: 8.2,
+            similarityLevel: '较低',
           ),
         ],
       );
@@ -106,23 +108,25 @@ void main() {
       expect(result.pointCandidates.single.sceneId, 'point-2');
     });
 
-    test('当前点位和其他点位都不达标时返回未匹配', () {
+    test('当前点位低于 0.1% 时直接返回未匹配且不依赖图库候选', () {
       final result = HomeWorkflowController.decideSceneMatch(
         currentScene: currentScene,
         currentPointMatch: PointMatchCandidate(
           sceneId: 'point-1',
           sceneName: '场景A / 点位1',
           styleImageId: 'style-1',
-          goodMatches: 52,
-          similarityPercent: HomeWorkflowController.similarityPercent(52),
+          matchedFeatureCount: 0,
+          similarityPercent: 0.0,
+          similarityLevel: '极低',
         ),
         otherPointMatches: [
           PointMatchCandidate(
             sceneId: 'point-2',
             sceneName: '场景A / 点位2',
             styleImageId: 'style-2',
-            goodMatches: 80,
-            similarityPercent: HomeWorkflowController.similarityPercent(80),
+            matchedFeatureCount: 15,
+            similarityPercent: 11.0,
+            similarityLevel: '高',
           ),
         ],
       );
@@ -130,13 +134,15 @@ void main() {
       expect(result.passed, isFalse);
       expect(result.failureType, SceneTransferFailureType.similarityTooLow);
       expect(result.reason, '未匹配点位，请重新拍摄');
+      expect(result.bestSimilarityLevel, '极低');
       expect(result.pointCandidates, isEmpty);
     });
   });
 
-  test('similarityPercent 按 Python 脚本口径计算百分比', () {
-    expect(HomeWorkflowController.similarityPercent(45), 50);
-    expect(HomeWorkflowController.similarityPercent(90), 100);
-    expect(HomeWorkflowController.similarityPercent(120), 100);
+  test('similarityLevel 按四档等级规则返回结果', () {
+    expect(HomeWorkflowController.similarityLevel(18.0), '极高');
+    expect(HomeWorkflowController.similarityLevel(12.0), '高');
+    expect(HomeWorkflowController.similarityLevel(3.5), '较低');
+    expect(HomeWorkflowController.similarityLevel(0.0), '极低');
   });
 }

@@ -4,9 +4,9 @@ import 'package:dio/dio.dart';
 import 'package:foreignscan/config/app_config.dart';
 import 'package:logger/logger.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:foreignscan/core/services/feature_match_service.dart';
 import 'package:foreignscan/core/services/wifi_communication_service.dart';
 import 'package:foreignscan/core/services/local_cache_service.dart';
-import 'package:foreignscan/core/services/orb_ffi_service.dart';
 import 'package:foreignscan/core/services/server_config_service.dart';
 
 // 全局服务提供者
@@ -132,7 +132,7 @@ final localCacheServiceProvider = Provider<LocalCacheService>((ref) {
   return LocalCacheService(ref.read(dioProvider));
 });
 
-// ORB 原生匹配服务提供者（通过 Dart FFI 调用 Android C++ OpenCV 动态库）
-final orbFfiServiceProvider = Provider<OrbFfiService>((ref) {
-  return OrbFfiService();
+// 特征匹配服务提供者（通过 Dart FFI 调用 Android C++ OpenCV 动态库）
+final featureMatchServiceProvider = Provider<FeatureMatchService>((ref) {
+  return FeatureMatchService();
 });

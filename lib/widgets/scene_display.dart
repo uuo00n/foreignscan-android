@@ -177,62 +177,49 @@ class SceneDisplay extends StatelessWidget {
             ),
           ),
           SizedBox(height: 24),
-          // 中文注释：操作按钮行（右对齐）：左侧“全部传输”，右侧“确认/重新传输”
+          // 中文注释：底部操作区固定为“左侧相似性标签 + 右侧操作按钮组”
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              if (onTransferAll != null) ...[
-                ElevatedButton.icon(
-                  onPressed: onTransferAll,
-                  icon: const Icon(Icons.cloud_upload_outlined),
-                  label: const Text('全部传输'),
-                  style: commonButtonStyle.copyWith(
-                    // 中文注释：仅改变背景色，其他尺寸样式保持一致
-                    backgroundColor: const WidgetStatePropertyAll(
-                      AppTheme.accentIndigo,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-              ],
               if (similarityText != null) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.successColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppTheme.successColor.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Text(
-                    similarityText,
-                    style: TextStyle(
-                      color: AppTheme.successColor,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+                _buildSimilarityBadge(scene, similarityText),
                 const SizedBox(width: 16),
               ],
-              ElevatedButton.icon(
-                onPressed: onConfirmTransfer,
-                icon: Icon(
-                  scene.isTransferred
-                      ? Icons.refresh_rounded
-                      : Icons.check_circle_outline,
-                ),
-                label: Text(scene.isTransferred ? '重新传输' : '确认传输'),
-                style: commonButtonStyle.copyWith(
-                  backgroundColor: WidgetStatePropertyAll(
-                    scene.isTransferred
-                        ? AppTheme.warningColor
-                        : AppTheme.primaryColor,
-                  ),
+              Expanded(
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 16,
+                  runSpacing: 12,
+                  children: [
+                    if (onTransferAll != null)
+                      ElevatedButton.icon(
+                        onPressed: onTransferAll,
+                        icon: const Icon(Icons.cloud_upload_outlined),
+                        label: const Text('全部传输'),
+                        style: commonButtonStyle.copyWith(
+                          // 中文注释：仅改变背景色，其他尺寸样式保持一致
+                          backgroundColor: const WidgetStatePropertyAll(
+                            AppTheme.accentIndigo,
+                          ),
+                        ),
+                      ),
+                    ElevatedButton.icon(
+                      onPressed: onConfirmTransfer,
+                      icon: Icon(
+                        scene.isTransferred
+                            ? Icons.refresh_rounded
+                            : Icons.check_circle_outline,
+                      ),
+                      label: Text(scene.isTransferred ? '重新传输' : '确认传输'),
+                      style: commonButtonStyle.copyWith(
+                        backgroundColor: WidgetStatePropertyAll(
+                          scene.isTransferred
+                              ? AppTheme.warningColor
+                              : AppTheme.primaryColor,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -240,6 +227,41 @@ class SceneDisplay extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildSimilarityBadge(SceneData scene, String similarityText) {
+    final Color badgeColor = _getSimilarityColor(scene.lastSimilarityLevel);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        similarityText,
+        style: TextStyle(
+          color: badgeColor,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Color _getSimilarityColor(String? level) {
+    switch (level) {
+      case '极高':
+        return AppTheme.successColor;
+      case '高':
+        return AppTheme.primaryColor;
+      case '较低':
+        return AppTheme.warningColor;
+      case '极低':
+        return AppTheme.errorColor;
+      default:
+        return AppTheme.textSecondary;
+    }
   }
 
   Color _getStatusColor(SceneData scene) {
@@ -268,11 +290,11 @@ class SceneDisplay extends StatelessWidget {
   }
 
   String? _buildSimilarityText(SceneData scene) {
-    final percent = scene.lastSimilarityPercent;
-    if (!scene.lastSimilarityPassed || percent == null) {
+    final level = scene.lastSimilarityLevel;
+    if (!scene.lastSimilarityPassed || level == null || level.isEmpty) {
       return null;
     }
-    return '相似度 ${percent.toStringAsFixed(1)}%';
+    return '相似性$level';
   }
 
   /// 模板参考图区域
