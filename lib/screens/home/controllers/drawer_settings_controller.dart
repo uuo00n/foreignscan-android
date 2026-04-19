@@ -50,10 +50,57 @@ class DrawerConnectionResult {
   });
 }
 
+enum DrawerServerStatusType { unconfigured, checking, online, offline }
+
+class DrawerServerStatus {
+  final DrawerServerStatusType type;
+  final String message;
+
+  const DrawerServerStatus({required this.type, required this.message});
+}
+
 class DrawerSettingsController {
   final WidgetRef _ref;
 
   const DrawerSettingsController(this._ref);
+
+  Future<DrawerServerStatus> probeServerStatus({
+    required String ipInput,
+    required String portInput,
+    required bool isWiredMode,
+  }) async {
+    final ip = ipInput.trim();
+    final port = int.tryParse(portInput.trim());
+
+    if (ip.isEmpty || port == null || port <= 0) {
+      return const DrawerServerStatus(
+        type: DrawerServerStatusType.unconfigured,
+        message: '未配置服务器地址',
+      );
+    }
+
+    final wifiService = _ref.read(wifiServiceProvider);
+    wifiService.setServerAddress(ip, port);
+
+    try {
+      final isConnected = await wifiService.testConnection();
+      if (isConnected) {
+        return DrawerServerStatus(
+          type: DrawerServerStatusType.online,
+          message: '服务器在线（${isWiredMode ? '有线' : '无线'}）',
+        );
+      }
+      return const DrawerServerStatus(
+        type: DrawerServerStatusType.offline,
+        message: '服务器离线：连接失败',
+      );
+    } catch (e) {
+      return DrawerServerStatus(
+        type: DrawerServerStatusType.offline,
+        message: '服务器离线：$e',
+      );
+    }
+  }
 
   Future<Map<String, dynamic>?> loadWifiInfo() async {
     final wifiService = _ref.read(wifiServiceProvider);
@@ -77,7 +124,7 @@ class DrawerSettingsController {
         isWiredMode: config.isWiredMode,
         ip: config.ip ?? '',
         portText: config.port?.toString() ?? '',
-        bindKey: '',
+        bindKey: config.padKey ?? '',
         lastWirelessIp: config.wirelessIp,
         lastWiredIp: config.wiredIp,
       );

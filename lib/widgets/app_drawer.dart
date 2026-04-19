@@ -9,11 +9,13 @@ import 'package:foreignscan/screens/home/controllers/drawer_settings_controller.
 class AppDrawer extends ConsumerStatefulWidget {
   final Function() onUploadPressed;
   final Function(bool isWiredMode)? onSyncPressed;
+  final int statusProbeTick;
 
   const AppDrawer({
     super.key,
     required this.onUploadPressed,
     this.onSyncPressed,
+    this.statusProbeTick = 0,
   });
 
   @override
@@ -30,9 +32,16 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   bool _hasTested = false; // 中文注释：是否已进行过“测试连接”，用于控制右侧状态提示的显示
   String? _testStatusText; // 中文注释：测试连接的提示文案（成功/失败/输入缺失等）
   Map<String, dynamic>? _wifiInfo;
+  bool _isWifiLoading = false;
   int _statusVersion =
       0; // 中文注释：状态版本号，每次状态变更递增，确保 AnimatedSwitcher 的子组件 Key 唯一，避免重复 Key
   bool _isAboutDialogShowing = false; // 中文注释：标记“关于”对话框是否正在显示，防止重复点击导致多次弹窗
+  bool _isBindKeyVisible = false; // 中文注释：绑定 Key 默认隐藏，可点击眼睛图标临时查看
+  bool _isServerStatusChecking = false;
+  DrawerServerStatus _serverStatus = const DrawerServerStatus(
+    type: DrawerServerStatusType.unconfigured,
+    message: '未检测',
+  );
 
   DrawerSettingsController _settingsController(WidgetRef ref) {
     return DrawerSettingsController(ref);
@@ -46,6 +55,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   }
 
   @override
+  void didUpdateWidget(covariant AppDrawer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.statusProbeTick != oldWidget.statusProbeTick) {
+      _probeServerStatus();
+    }
+  }
+
+  @override
   void dispose() {
     _ipController.dispose();
     _portController.dispose();
@@ -54,13 +71,17 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   }
 
   Future<void> _loadWifiInfo() async {
+    if (_isWifiLoading) return;
+    setState(() {
+      _isWifiLoading = true;
+    });
     final wifiInfo = await _settingsController(ref).loadWifiInfo();
 
-    if (mounted) {
-      setState(() {
-        _wifiInfo = wifiInfo;
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _wifiInfo = wifiInfo;
+      _isWifiLoading = false;
+    });
   }
 
   Future<void> _testConnection() async {
@@ -71,6 +92,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     // 中文注释：立即标记为连接中，阻止再次点击。
     setState(() {
       _isConnecting = true;
+      _isServerStatusChecking = true;
+      _serverStatus = const DrawerServerStatus(
+        type: DrawerServerStatusType.checking,
+        message: '检测中...',
+      );
     });
 
     final result = await _settingsController(ref).testConnectionAndPersist(
@@ -88,6 +114,13 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       _isConnected = result.isConnected;
       _hasTested = true;
       _testStatusText = result.message;
+      _isServerStatusChecking = false;
+      _serverStatus = DrawerServerStatus(
+        type: result.isConnected
+            ? DrawerServerStatusType.online
+            : DrawerServerStatusType.offline,
+        message: result.message,
+      );
       _statusVersion++; // 中文注释：每次结果更新递增版本，避免 AnimatedSwitcher 在快速重复状态下的重复 Key
     });
 
@@ -108,10 +141,105 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     _isConnected = false;
     _hasTested = false;
     _testStatusText = null;
+    _serverStatus = const DrawerServerStatus(
+      type: DrawerServerStatusType.unconfigured,
+      message: '未检测',
+    );
   }
 
   void _dismissInputFocus() {
     FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  Future<void> _probeServerStatus() async {
+    if (_isConnecting || _isServerStatusChecking) return;
+
+    setState(() {
+      _isServerStatusChecking = true;
+      _serverStatus = const DrawerServerStatus(
+        type: DrawerServerStatusType.checking,
+        message: '检测中...',
+      );
+    });
+
+    final result = await _settingsController(ref).probeServerStatus(
+      ipInput: _ipController.text,
+      portInput: _portController.text,
+      isWiredMode: _serverSettings.isWiredMode,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isServerStatusChecking = false;
+      _serverStatus = result;
+    });
+  }
+
+  Color _serverStatusColor(DrawerServerStatusType type) {
+    switch (type) {
+      case DrawerServerStatusType.online:
+        return AppTheme.successColor;
+      case DrawerServerStatusType.offline:
+        return AppTheme.errorColor;
+      case DrawerServerStatusType.checking:
+        return AppTheme.primaryColor;
+      case DrawerServerStatusType.unconfigured:
+        return AppTheme.warningColor;
+    }
+  }
+
+  IconData _serverStatusIcon(DrawerServerStatusType type) {
+    switch (type) {
+      case DrawerServerStatusType.online:
+        return Icons.cloud_done;
+      case DrawerServerStatusType.offline:
+        return Icons.cloud_off;
+      case DrawerServerStatusType.checking:
+        return Icons.sync;
+      case DrawerServerStatusType.unconfigured:
+        return Icons.help_outline;
+    }
+  }
+
+  String _serverStatusLabel(DrawerServerStatusType type) {
+    switch (type) {
+      case DrawerServerStatusType.unconfigured:
+        return '未配置';
+      case DrawerServerStatusType.checking:
+        return '检测中';
+      case DrawerServerStatusType.online:
+        return '在线';
+      case DrawerServerStatusType.offline:
+        return '离线';
+    }
+  }
+
+  bool get _hasWifiConnection {
+    final rawSsid = (_wifiInfo?['ssid'] ?? '').toString().trim();
+    if (rawSsid.isEmpty) return false;
+    final normalized = rawSsid.toLowerCase();
+    return normalized != '<unknown ssid>' && normalized != 'unknown ssid';
+  }
+
+  Color get _wifiStatusColor {
+    if (_isWifiLoading) return AppTheme.primaryColor;
+    return _hasWifiConnection ? AppTheme.successColor : AppTheme.warningColor;
+  }
+
+  IconData get _wifiStatusIcon {
+    if (_isWifiLoading) return Icons.sync;
+    return _hasWifiConnection ? Icons.wifi : Icons.wifi_off;
+  }
+
+  String get _wifiStatusLabel {
+    if (_isWifiLoading) return '检测中';
+    return _hasWifiConnection ? '已连接' : '未连接';
+  }
+
+  String get _wifiDetailMessage {
+    final ssid = (_wifiInfo?['ssid'] ?? '未连接').toString();
+    final ip = (_wifiInfo?['ipAddress'] ?? '未知').toString();
+    return 'SSID: $ssid\nIP地址: $ip';
   }
 
   @override
@@ -169,21 +297,122 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   horizontal: 16.0,
                   vertical: 8.0,
                 ),
-                child: _wifiInfo == null
-                    ? const Center(child: CircularProgressIndicator())
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('SSID: ${_wifiInfo!['ssid'] ?? '未连接'}'),
-                          const SizedBox(height: 4),
-                          Text('IP地址: ${_wifiInfo!['ipAddress'] ?? '未知'}'),
-                          const SizedBox(height: 8),
-                          ElevatedButton(
-                            onPressed: _loadWifiInfo,
-                            child: const Text('刷新WiFi信息'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _wifiStatusIcon,
+                          color: _wifiStatusColor,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '状态：$_wifiStatusLabel',
+                            style: TextStyle(
+                              color: _wifiStatusColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _wifiDetailMessage,
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 13,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ElevatedButton(
+                        onPressed: _isWifiLoading ? null : _loadWifiInfo,
+                        child: _isWifiLoading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('刷新状态'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          ExpansionTile(
+            leading: const Icon(Icons.cloud, color: AppTheme.primaryColor),
+            title: const Text('服务器状态'),
+            collapsedIconColor: AppTheme.primaryColor,
+            iconColor: AppTheme.primaryColor,
+            textColor: AppTheme.primaryColor,
+            collapsedTextColor: AppTheme.textPrimary,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 8.0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _serverStatusIcon(_serverStatus.type),
+                          color: _serverStatusColor(_serverStatus.type),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '状态：${_serverStatusLabel(_serverStatus.type)}',
+                            style: TextStyle(
+                              color: _serverStatusColor(_serverStatus.type),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _serverStatus.message,
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ElevatedButton(
+                        onPressed: _isServerStatusChecking
+                            ? null
+                            : _probeServerStatus,
+                        child: _isServerStatusChecking
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('刷新状态'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -269,11 +498,24 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     const SizedBox(height: 8),
                     TextField(
                       controller: _bindKeyController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
+                      obscureText: !_isBindKeyVisible,
+                      decoration: InputDecoration(
                         labelText: '绑定 Key',
                         hintText: '如需重绑请输入新的绑定码',
-                        border: OutlineInputBorder(),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _isBindKeyVisible = !_isBindKeyVisible;
+                            });
+                          },
+                          icon: Icon(
+                            _isBindKeyVisible
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          tooltip: _isBindKeyVisible ? '隐藏绑定 Key' : '显示绑定 Key',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -383,15 +625,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           ),
           const Divider(),
           ListTile(
-            leading: const Icon(Icons.settings, color: AppTheme.primaryColor),
-            title: const Text('设置'),
-            onTap: () {
-              _dismissInputFocus();
-              Navigator.pop(context);
-              AppRouter.navigateToSettings();
-            },
-          ),
-          ListTile(
             leading: const Icon(Icons.info, color: AppTheme.primaryColor),
             title: const Text('关于'),
             onTap: () {
@@ -437,5 +670,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       _portController.text = settings.portText;
       _bindKeyController.text = settings.bindKey;
     });
+
+    if (widget.statusProbeTick > 0) {
+      await _probeServerStatus();
+    }
   }
 }

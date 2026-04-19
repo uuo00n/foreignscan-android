@@ -28,6 +28,8 @@ enum _CaptureProcessMode { compare, skipCompare }
 
 class _HomePageState extends ConsumerState<HomePage> {
   bool _hasPromptedSetup = false; // 防止重复弹窗
+  bool _isSyncInProgress = false; // 防止重复触发同步，避免弹出多个同步对话框
+  int _drawerStatusProbeTick = 0; // 抽屉每次打开递增，用于触发服务器状态自动探测
   ProviderSubscription<HomeState>? _homeStateSubscription;
 
   HomeWorkflowController _workflow(WidgetRef ref) {
@@ -94,10 +96,17 @@ class _HomePageState extends ConsumerState<HomePage> {
         // 中文注释：首页为平板主工作台，不应因抽屉输入框弹出键盘而压缩主体高度。
         resizeToAvoidBottomInset: false,
         // 中文注释：移除每次 build 重新创建的 GlobalKey，避免频繁重建带来的潜在问题。
+        onDrawerChanged: (isOpened) {
+          if (!isOpened || !mounted) return;
+          setState(() {
+            _drawerStatusProbeTick++;
+          });
+        },
         appBar: _buildAppBar(context, ref),
         drawer: AppDrawer(
           onUploadPressed: () => _uploadLatestImage(context, ref),
           onSyncPressed: _handleSync,
+          statusProbeTick: _drawerStatusProbeTick,
         ),
         body: _buildAdaptiveHomeBody(context, ref, homeState, homeViewModel),
       ),
@@ -138,7 +147,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           right: 16,
           child: IgnorePointer(
             child: AnimatedOpacity(
-              opacity: homeState.isLoading ? 1 : 0,
+              opacity: homeState.isLoading && !_isSyncInProgress ? 1 : 0,
               duration: const Duration(milliseconds: 220),
               child: _buildSyncingBanner(),
             ),
@@ -1278,9 +1287,23 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _handleSync(bool isWiredMode) async {
     if (!mounted) return;
+    if (_isSyncInProgress) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('正在同步，请稍候...'),
+          backgroundColor: AppTheme.warningColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _isSyncInProgress = true;
+    });
 
     // 弹出进度对话框
     BuildContext? progressDialogContext;
+    var isProgressDialogClosed = false;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1305,7 +1328,13 @@ class _HomePageState extends ConsumerState<HomePage> {
 
       if (!mounted) return;
 
-      // 显示 SnackBar
+      final dialogCtx = progressDialogContext;
+      if (dialogCtx != null && dialogCtx.mounted) {
+        DialogSafety.popDialogIfMounted(dialogCtx);
+        isProgressDialogClosed = true;
+      }
+
+      // 统一结果提示：同步结束后再展示浮动提示，避免被进度弹窗遮挡
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1320,12 +1349,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ? AppTheme.successColor
                     : AppTheme.warningColor)
               : AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } finally {
+      if (mounted) {
+        setState(() {
+          _isSyncInProgress = false;
+        });
+      }
       final dialogCtx = progressDialogContext;
-      if (dialogCtx != null && dialogCtx.mounted) {
-        DialogSafety.popIfMounted(dialogCtx);
+      if (!isProgressDialogClosed && dialogCtx != null && dialogCtx.mounted) {
+        DialogSafety.popDialogIfMounted(dialogCtx);
       }
     }
   }

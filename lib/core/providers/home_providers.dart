@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
 import 'dart:io';
 import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/models/inspection_record.dart';
@@ -42,16 +43,18 @@ final styleImagesForSelectedSceneProvider =
 
       final images = await styleService.getStyleImagesByScene(selectedScene.id);
 
-      // 预缓存：若存在首张样式图，先将其下载到本地，便于拍摄时离线查看
+      // 预缓存：若存在首张样式图，后台下载到本地，避免阻塞当前页面首屏展示
       if (images.isNotEmpty) {
         final first = images.first;
         final remoteUrl = styleService.buildImageUrl(first);
         // 子目录：style_images/<sceneId>；文件名：<styleId>_<filename或style.jpg>
         final filename = '${first.id}_${first.filename ?? 'style.jpg'}';
-        await cacheService.ensureCachedImage(
-          url: remoteUrl,
-          subdir: 'style_images/${selectedScene.id}',
-          filename: filename,
+        unawaited(
+          cacheService.ensureCachedImage(
+            url: remoteUrl,
+            subdir: 'style_images/${selectedScene.id}',
+            filename: filename,
+          ),
         );
       }
 
