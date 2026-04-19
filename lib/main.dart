@@ -6,7 +6,7 @@ import 'package:foreignscan/config/app_constants.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/providers/camera_providers.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

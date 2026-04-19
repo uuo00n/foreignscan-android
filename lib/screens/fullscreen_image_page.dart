@@ -1,7 +1,7 @@
 // ==================== lib/screens/fullscreen_image_page.dart ====================
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 
 /// 全屏图片查看页面
 /// - 支持网络图片的缩放与拖拽查看（InteractiveViewer）

@@ -114,6 +114,8 @@ final recordsProvider = FutureProvider<List<InspectionRecord>>((ref) async {
 
 // Home页面状态
 class HomeState {
+  static const Object _errorMessageUnchanged = Object();
+
   final int selectedSceneIndex;
   final int currentRecordPage;
   final int recordsPerPage;
@@ -137,7 +139,7 @@ class HomeState {
     int? currentRecordPage,
     int? recordsPerPage,
     bool? isLoading,
-    String? errorMessage,
+    Object? errorMessage = _errorMessageUnchanged,
     List<SceneData>? scenes,
     List<InspectionRecord>? inspectionRecords,
   }) {
@@ -146,7 +148,9 @@ class HomeState {
       currentRecordPage: currentRecordPage ?? this.currentRecordPage,
       recordsPerPage: recordsPerPage ?? this.recordsPerPage,
       isLoading: isLoading ?? this.isLoading,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: identical(errorMessage, _errorMessageUnchanged)
+          ? this.errorMessage
+          : errorMessage as String?,
       scenes: scenes ?? this.scenes,
       inspectionRecords: inspectionRecords ?? this.inspectionRecords,
     );
@@ -177,27 +181,83 @@ class HomeViewModel extends StateNotifier<HomeState> {
     : super(const HomeState());
 
   Future<void> initializeData({bool forceOffline = false}) async {
+    List<SceneData> buildUpdatedScenes(
+      List<SceneData> scenes,
+      List<InspectionRecord> records,
+    ) {
+      return _calculateScenesStatus(scenes, records);
+    }
+
+    int clampSelectedIndex(List<SceneData> scenes) {
+      if (scenes.isEmpty) {
+        return 0;
+      }
+      return state.selectedSceneIndex.clamp(0, scenes.length - 1);
+    }
+
     try {
       state = state.copyWith(isLoading: true, errorMessage: null);
 
-      final scenes = await _sceneService.getScenes(forceOffline: forceOffline);
-      final records = await _recordService.getRecords(
-        forceOffline: forceOffline,
-      );
+      // 中文注释：强制离线模式（例如同步流程检测到离线）直接读本地并结束。
+      if (forceOffline) {
+        final scenes = await _sceneService.getScenes(forceOffline: true);
+        final records = await _recordService.getRecords(forceOffline: true);
+        final updatedScenes = buildUpdatedScenes(scenes, records);
+        state = state.copyWith(
+          scenes: updatedScenes,
+          inspectionRecords: records,
+          selectedSceneIndex: clampSelectedIndex(updatedScenes),
+          isLoading: false,
+          errorMessage: null,
+        );
+        return;
+      }
 
-      final updatedScenes = _calculateScenesStatus(scenes, records);
+      // 中文注释：常规启动先尝试本地缓存即显，避免离线时整页空白等待网络超时。
+      if (state.scenes.isEmpty && state.inspectionRecords.isEmpty) {
+        try {
+          final cachedScenesFuture = _sceneService.getScenes(
+            forceOffline: true,
+          );
+          final cachedRecordsFuture = _recordService.getRecords(
+            forceOffline: true,
+          );
+          final cachedScenes = await cachedScenesFuture;
+          final cachedRecords = await cachedRecordsFuture;
+          final updatedCachedScenes = buildUpdatedScenes(
+            cachedScenes,
+            cachedRecords,
+          );
+          if (updatedCachedScenes.isNotEmpty || cachedRecords.isNotEmpty) {
+            state = state.copyWith(
+              scenes: updatedCachedScenes,
+              inspectionRecords: cachedRecords,
+              selectedSceneIndex: clampSelectedIndex(updatedCachedScenes),
+              isLoading: true,
+              errorMessage: null,
+            );
+          }
+        } catch (_) {
+          // 中文注释：缓存读取失败时继续走网络流程，不阻塞首屏。
+        }
+      }
 
-      final clampedIndex = updatedScenes.isEmpty
-          ? 0
-          : state.selectedSceneIndex.clamp(0, updatedScenes.length - 1);
-
+      final scenes = await _sceneService.getScenes(forceOffline: false);
+      final records = await _recordService.getRecords(forceOffline: false);
+      final updatedScenes = buildUpdatedScenes(scenes, records);
       state = state.copyWith(
         scenes: updatedScenes,
         inspectionRecords: records,
-        selectedSceneIndex: clampedIndex,
+        selectedSceneIndex: clampSelectedIndex(updatedScenes),
         isLoading: false,
+        errorMessage: null,
       );
     } catch (e) {
+      // 中文注释：若已展示缓存数据，则网络失败仅结束同步态，不覆盖为错误页。
+      if (state.scenes.isNotEmpty || state.inspectionRecords.isNotEmpty) {
+        state = state.copyWith(isLoading: false, errorMessage: null);
+        return;
+      }
       state = state.copyWith(isLoading: false, errorMessage: '数据加载失败: $e');
     }
   }
@@ -312,7 +372,11 @@ class HomeViewModel extends StateNotifier<HomeState> {
     }
   }
 
-  Future<void> updateSceneImage(String sceneId, String imagePath) async {
+  Future<void> updateSceneImage(
+    String sceneId,
+    String imagePath, {
+    bool skipSimilarityCheck = false,
+  }) async {
     try {
       final updatedScenes = state.scenes.map((scene) {
         if (scene.id == sceneId) {
@@ -323,6 +387,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
             clearLastSimilarityPercent: true,
             clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
+            skipSimilarityCheck: skipSimilarityCheck,
           );
         }
         return scene;
@@ -330,7 +395,11 @@ class HomeViewModel extends StateNotifier<HomeState> {
 
       state = state.copyWith(scenes: updatedScenes);
 
-      await _sceneService.updateSceneImage(sceneId, imagePath);
+      await _sceneService.updateSceneImage(
+        sceneId,
+        imagePath,
+        skipSimilarityCheck: skipSimilarityCheck,
+      );
     } catch (e) {
       state = state.copyWith(errorMessage: '更新场景图片失败: $e');
     }
@@ -352,6 +421,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
             clearLastSimilarityPercent: true,
             clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
+            skipSimilarityCheck: false,
           );
         }
 
@@ -363,6 +433,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
             clearLastSimilarityPercent: true,
             clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
+            skipSimilarityCheck: false,
           );
         }
 

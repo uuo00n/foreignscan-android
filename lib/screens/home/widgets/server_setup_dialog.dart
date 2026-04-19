@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:foreignscan/core/widgets/dialog_safety.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 
 class ServerSetupResult {
   final String ip;

@@ -1,7 +1,7 @@
 // ==================== lib/widgets/scene_display.dart ====================
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 import '../models/scene_data.dart';
 import '../screens/fullscreen_image_page.dart';
 

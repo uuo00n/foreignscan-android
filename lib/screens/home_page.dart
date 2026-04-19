@@ -1,7 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 import 'package:foreignscan/core/providers/home_providers.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/providers/camera_providers.dart';
@@ -10,7 +12,6 @@ import 'package:foreignscan/core/widgets/loading_widget.dart';
 import 'package:foreignscan/core/widgets/error_widget.dart';
 import 'package:foreignscan/core/widgets/app_bar_actions.dart';
 import 'package:foreignscan/core/widgets/dialog_safety.dart';
-import 'package:foreignscan/models/scene_data.dart';
 import 'package:foreignscan/widgets/app_drawer.dart';
 import 'package:foreignscan/screens/home/controllers/home_workflow_controller.dart';
 import 'package:foreignscan/screens/home/widgets/home_main_layout.dart';
@@ -22,6 +23,8 @@ class HomePage extends ConsumerStatefulWidget {
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
 }
+
+enum _CaptureProcessMode { compare, skipCompare }
 
 class _HomePageState extends ConsumerState<HomePage> {
   bool _hasPromptedSetup = false; // 防止重复弹窗
@@ -88,20 +91,108 @@ class _HomePageState extends ConsumerState<HomePage> {
         _showExitConfirmDialog(context);
       },
       child: Scaffold(
+        // 中文注释：首页为平板主工作台，不应因抽屉输入框弹出键盘而压缩主体高度。
+        resizeToAvoidBottomInset: false,
         // 中文注释：移除每次 build 重新创建的 GlobalKey，避免频繁重建带来的潜在问题。
         appBar: _buildAppBar(context, ref),
         drawer: AppDrawer(
           onUploadPressed: () => _uploadLatestImage(context, ref),
           onSyncPressed: _handleSync,
         ),
-        body: homeState.isLoading
-            ? const LoadingWidget(message: '正在加载数据...')
-            : homeState.errorMessage != null
-            ? ErrorWidgetCustom(
-                message: homeState.errorMessage!,
-                onRetry: () => homeViewModel.refreshData(),
-              )
-            : _buildBody(context, ref, homeState, homeViewModel),
+        body: _buildAdaptiveHomeBody(context, ref, homeState, homeViewModel),
+      ),
+    );
+  }
+
+  Widget _buildAdaptiveHomeBody(
+    BuildContext context,
+    WidgetRef ref,
+    HomeState homeState,
+    HomeViewModel homeViewModel,
+  ) {
+    final hasData =
+        homeState.scenes.isNotEmpty || homeState.inspectionRecords.isNotEmpty;
+    final showBlockingLoading = homeState.isLoading && !hasData;
+    final showErrorPage = homeState.errorMessage != null && !hasData;
+
+    if (showBlockingLoading) {
+      return const LoadingWidget(message: '正在加载数据...');
+    }
+
+    if (showErrorPage) {
+      return ErrorWidgetCustom(
+        message: homeState.errorMessage!,
+        onRetry: () => homeViewModel.refreshData(),
+      );
+    }
+
+    return Stack(
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: _buildBody(context, ref, homeState, homeViewModel),
+        ),
+        Positioned(
+          top: 12,
+          left: 16,
+          right: 16,
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: homeState.isLoading ? 1 : 0,
+              duration: const Duration(milliseconds: 220),
+              child: _buildSyncingBanner(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSyncingBanner() {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceLight.withValues(alpha: 0.96),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.dividerColor),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.shadowColor.withValues(alpha: 0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppTheme.primaryColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '正在同步最新数据...',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -237,7 +328,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     } catch (e) {
       ref.read(loggerProvider).w('保存服务器配置失败: $e');
     }
-    _schedulePostConfigRefresh(showSuccess: true);
+
+    // 首次绑定后立即执行一次完整同步（包含模板图预下载），确保可离线拍摄
+    await _handleSync(result.isWiredMode);
   }
 
   // 显示退出确认对话框
@@ -298,14 +391,18 @@ class _HomePageState extends ConsumerState<HomePage> {
       barrierDismissible: false,
       builder: (dialogContext) {
         progressDialogContext = dialogContext;
-        return const AlertDialog(
-          title: Text('正在校验并上传'),
+        return AlertDialog(
+          title: Text(selectedScene.skipSimilarityCheck ? '正在上传' : '正在校验并上传'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('正在进行场景一致性校验并上传图片，请稍候...'),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                selectedScene.skipSimilarityCheck
+                    ? '正在上传图片，请稍候...'
+                    : '正在进行场景一致性校验并上传图片，请稍候...',
+              ),
             ],
           ),
         );
@@ -348,13 +445,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             .read(homeViewModelProvider.notifier)
             .updateSceneSimilarityStatus(selectedScene.id, passed: false);
         if (!context.mounted) return;
-        await _showPointCandidatesDialog(
-          context,
-          ref,
-          sourceScene: selectedScene,
-          imagePath: selectedScene.capturedImage!,
-          result: result,
-        );
+        await _showPointCandidatesDialog(context, ref, result: result);
         return;
       }
 
@@ -611,6 +702,47 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+  Future<_CaptureProcessMode?> _showCaptureProcessChoiceDialog(
+    BuildContext context,
+  ) {
+    return showDialog<_CaptureProcessMode>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('拍摄成功'),
+        content: const Text('请选择后续处理方式：'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(_CaptureProcessMode.skipCompare),
+            child: const Text('不比对'),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_CaptureProcessMode.compare),
+            child: const Text('比对'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _discardCapturedImage(String imagePath) async {
+    try {
+      final file = File(imagePath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      ref.read(loggerProvider).w('取消拍摄后删除临时图片失败: $e');
+    }
+  }
+
   Future<void> _navigateToCamera(BuildContext context, WidgetRef ref) async {
     final homeState = ref.read(homeViewModelProvider);
     final selectedScene = homeState.selectedScene;
@@ -638,6 +770,42 @@ class _HomePageState extends ConsumerState<HomePage> {
       // 处理相机返回的结果
       if (imagePath != null) {
         if (!context.mounted) return;
+        final captureMode = await _showCaptureProcessChoiceDialog(context);
+        if (!context.mounted) return;
+
+        if (captureMode == null) {
+          await _discardCapturedImage(imagePath);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('已取消本次拍摄'),
+              backgroundColor: AppTheme.warningColor,
+            ),
+          );
+          return;
+        }
+
+        final homeViewModel = ref.read(homeViewModelProvider.notifier);
+        if (captureMode == _CaptureProcessMode.skipCompare) {
+          await homeViewModel.updateSceneImage(
+            selectedScene.id,
+            imagePath,
+            skipSimilarityCheck: true,
+          );
+          await homeViewModel.updateSceneSimilarityStatus(
+            selectedScene.id,
+            passed: false,
+          );
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('已保存照片（未比对）'),
+              backgroundColor: AppTheme.successColor,
+            ),
+          );
+          return;
+        }
+
         var validationDialogShown = false;
         BuildContext? validationDialogContext;
         SceneTransferResult validationResult;
@@ -662,11 +830,13 @@ class _HomePageState extends ConsumerState<HomePage> {
         if (!context.mounted) return;
 
         if (_hasPointCandidates(validationResult)) {
+          await ref
+              .read(homeViewModelProvider.notifier)
+              .updateSceneSimilarityStatus(selectedScene.id, passed: false);
+          if (!context.mounted) return;
           await _showPointCandidatesDialog(
             context,
             ref,
-            sourceScene: selectedScene,
-            imagePath: imagePath,
             result: validationResult,
           );
           return;
@@ -690,8 +860,11 @@ class _HomePageState extends ConsumerState<HomePage> {
           return;
         }
 
-        final homeViewModel = ref.read(homeViewModelProvider.notifier);
-        await homeViewModel.updateSceneImage(selectedScene.id, imagePath);
+        await homeViewModel.updateSceneImage(
+          selectedScene.id,
+          imagePath,
+          skipSimilarityCheck: false,
+        );
         final similarity = validationResult.similarity;
         if (similarity != null) {
           await homeViewModel.updateSceneSimilarityStatus(
@@ -775,14 +948,18 @@ class _HomePageState extends ConsumerState<HomePage> {
       barrierDismissible: false,
       builder: (dialogContext) {
         progressDialogContext = dialogContext;
-        return const AlertDialog(
-          title: Text('正在校验并传输'),
+        return AlertDialog(
+          title: Text(selectedScene.skipSimilarityCheck ? '正在传输' : '正在校验并传输'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('正在进行场景一致性校验并传输图片，请稍候...'),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                selectedScene.skipSimilarityCheck
+                    ? '正在传输图片，请稍候...'
+                    : '正在进行场景一致性校验并传输图片，请稍候...',
+              ),
             ],
           ),
         );
@@ -800,13 +977,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             .read(homeViewModelProvider.notifier)
             .updateSceneSimilarityStatus(selectedScene.id, passed: false);
         if (!context.mounted) return;
-        await _showPointCandidatesDialog(
-          context,
-          ref,
-          sourceScene: selectedScene,
-          imagePath: selectedScene.capturedImage!,
-          result: result,
-        );
+        await _showPointCandidatesDialog(context, ref, result: result);
         return;
       }
 
@@ -908,8 +1079,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   Future<void> _showPointCandidatesDialog(
     BuildContext context,
     WidgetRef ref, {
-    required SceneData sourceScene,
-    required String imagePath,
     required SceneTransferResult result,
   }) async {
     final similarity = result.similarity;
@@ -928,31 +1097,20 @@ class _HomePageState extends ConsumerState<HomePage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('当前照片与当前点位不一致，请确认匹配到的点位：'),
+              const Text('当前照片与当前点位不一致，建议优先核对以下相似点位：'),
               const SizedBox(height: 16),
-              ...candidates.map(
-                (candidate) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(dialogContext).pop();
-                        _handlePointCandidateSelected(
-                          context,
-                          ref,
-                          sourceScene: sourceScene,
-                          imagePath: imagePath,
-                          candidate: candidate,
-                        );
-                      },
-                      child: Text(
-                        '${candidate.sceneName}（相似性${candidate.similarityLevel}）',
-                      ),
-                    ),
+              ...candidates.asMap().entries.map((entry) {
+                final index = entry.key + 1;
+                final candidate = entry.value;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    '$index. ${candidate.sceneName}（相似性${candidate.similarityLevel}）',
                   ),
-                ),
-              ),
+                );
+              }),
+              const SizedBox(height: 4),
+              const Text('请重新拍摄，或核对点位后再提交。'),
             ],
           ),
         ),
@@ -969,42 +1127,6 @@ class _HomePageState extends ConsumerState<HomePage> {
             child: const Text('重新拍摄'),
           ),
         ],
-      ),
-    );
-  }
-
-  Future<void> _handlePointCandidateSelected(
-    BuildContext context,
-    WidgetRef ref, {
-    required SceneData sourceScene,
-    required String imagePath,
-    required PointMatchCandidate candidate,
-  }) async {
-    final homeViewModel = ref.read(homeViewModelProvider.notifier);
-    await homeViewModel.reassignSceneImage(
-      fromSceneId: sourceScene.id,
-      toSceneId: candidate.sceneId,
-      imagePath: imagePath,
-    );
-    await homeViewModel.updateSceneSimilarityStatus(
-      candidate.sceneId,
-      passed: true,
-      similarityPercent: candidate.similarityPercent,
-      similarityLevel: candidate.similarityLevel,
-      styleImageId: candidate.styleImageId,
-    );
-    homeViewModel.selectSceneById(candidate.sceneId);
-
-    if (!context.mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '已切换到点位「${candidate.sceneName}」，相似性${candidate.similarityLevel}，请确认传输或重新拍摄。',
-        ),
-        backgroundColor: AppTheme.successColor,
       ),
     );
   }
@@ -1188,7 +1310,9 @@ class _HomePageState extends ConsumerState<HomePage> {
         SnackBar(
           content: Text(
             result.success
-                ? (result.isOnline ? '同步完成：已与服务器通信并更新数据' : '离线刷新完成：已更新本地缓存数据')
+                ? (result.isOnline
+                      ? _buildOnlineSyncMessage(result)
+                      : '离线刷新完成：已更新本地缓存数据')
                 : '同步失败：${result.errorMessage ?? '未知错误'}',
           ),
           backgroundColor: result.success
@@ -1204,5 +1328,15 @@ class _HomePageState extends ConsumerState<HomePage> {
         DialogSafety.popIfMounted(dialogCtx);
       }
     }
+  }
+
+  String _buildOnlineSyncMessage(SyncDataResult result) {
+    if (result.totalScenes <= 0) {
+      return '同步完成：已与服务器通信并更新数据';
+    }
+    if (result.failedScenes > 0) {
+      return '同步完成：模板图缓存 ${result.cachedScenes}/${result.totalScenes}，失败 ${result.failedScenes} 个点位';
+    }
+    return '同步完成：模板图已缓存 ${result.cachedScenes}/${result.totalScenes} 个点位，可离线拍摄';
   }
 }

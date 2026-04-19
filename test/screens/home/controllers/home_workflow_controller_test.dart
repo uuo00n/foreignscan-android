@@ -108,7 +108,7 @@ void main() {
       expect(result.pointCandidates.single.sceneId, 'point-2');
     });
 
-    test('当前点位低于 0.1% 时直接返回未匹配且不依赖图库候选', () {
+    test('当前点位低于 0.1% 时仍应检查其他点位候选并返回候选结果', () {
       final result = HomeWorkflowController.decideSceneMatch(
         currentScene: currentScene,
         currentPointMatch: PointMatchCandidate(
@@ -129,6 +129,27 @@ void main() {
             similarityLevel: '高',
           ),
         ],
+      );
+
+      expect(result.passed, isFalse);
+      expect(result.failureType, SceneTransferFailureType.pointCandidatesFound);
+      expect(result.pointCandidates.length, 1);
+      expect(result.pointCandidates.first.sceneId, 'point-2');
+      expect(result.bestSimilarityLevel, '高');
+    });
+
+    test('当前点位低于阈值且无其他候选时返回未匹配', () {
+      final result = HomeWorkflowController.decideSceneMatch(
+        currentScene: currentScene,
+        currentPointMatch: PointMatchCandidate(
+          sceneId: 'point-1',
+          sceneName: '场景A / 点位1',
+          styleImageId: 'style-1',
+          matchedFeatureCount: 0,
+          similarityPercent: 0.0,
+          similarityLevel: '极低',
+        ),
+        otherPointMatches: [],
       );
 
       expect(result.passed, isFalse);

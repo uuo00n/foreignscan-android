@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/providers/home_providers.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 import 'package:foreignscan/core/widgets/app_bar_actions.dart';
 import 'package:foreignscan/core/widgets/error_widget.dart';
 import 'package:foreignscan/core/widgets/loading_widget.dart';

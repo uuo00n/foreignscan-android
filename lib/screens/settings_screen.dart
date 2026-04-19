@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 import 'package:foreignscan/widgets/about_app_dialog.dart';
 
 class SettingsScreen extends StatelessWidget {

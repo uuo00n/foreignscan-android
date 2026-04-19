@@ -128,17 +128,24 @@ class SyncDataResult {
   final bool success;
   final bool isOnline;
   final String? errorMessage;
+  final int totalScenes;
+  final int cachedScenes;
+  final int failedScenes;
+  final List<String> failedSceneIds;
 
   const SyncDataResult({
     required this.success,
     required this.isOnline,
     this.errorMessage,
+    this.totalScenes = 0,
+    this.cachedScenes = 0,
+    this.failedScenes = 0,
+    this.failedSceneIds = const <String>[],
   });
 }
 
 class HomeWorkflowController {
   static const double directMatchThreshold = 15.0;
-  static const double minimumMatchThreshold = 0.1;
   static const int _maxCandidateCount = 2;
   static const double _ratioThreshold = 0.7;
   static const int _siftMaxFeatures = 2000;
@@ -165,6 +172,7 @@ class HomeWorkflowController {
     final currentMatchedFeatureCount =
         currentPointMatch?.matchedFeatureCount ?? 0;
 
+    // 与当前点位模板匹配 → 是（>= 阈值）→ 直接返回匹配成功
     if (currentPointMatch != null &&
         currentSimilarityPercent >= directMatchThreshold) {
       return SceneSimilarityResult(
@@ -180,21 +188,7 @@ class HomeWorkflowController {
       );
     }
 
-    if (currentPointMatch != null &&
-        currentSimilarityPercent < minimumMatchThreshold) {
-      return SceneSimilarityResult(
-        passed: false,
-        matchedSceneId: currentScene.id,
-        matchedSceneName: currentScene.name,
-        bestStyleImageId: currentPointMatch.styleImageId,
-        bestSimilarityPercent: currentSimilarityPercent,
-        bestSimilarityLevel: currentSimilarityLevel,
-        bestMatchedFeatureCount: currentMatchedFeatureCount,
-        reason: '未匹配点位，请重新拍摄',
-        failureType: SceneTransferFailureType.similarityTooLow,
-      );
-    }
-
+    // 与当前点位模板匹配 → 否 → 检查同房间其他点位候选
     final sortedCandidates = otherPointMatches.toList()
       ..sort((a, b) {
         final percentCompare = b.similarityPercent.compareTo(
@@ -230,6 +224,7 @@ class HomeWorkflowController {
       );
     }
 
+    // 所有点位都不匹配 → 提示重新拍摄
     return SceneSimilarityResult(
       passed: false,
       matchedSceneId: currentScene.id,
@@ -252,6 +247,14 @@ class HomeWorkflowController {
       return SceneTransferResult.failure(
         '请先拍摄该场景',
         failureType: SceneTransferFailureType.noCapturedImage,
+      );
+    }
+
+    final hasLocalTemplates = await _hasAnyLocalReferenceTemplate(scene.id);
+    if (!hasLocalTemplates) {
+      return SceneTransferResult.failure(
+        '当前点位缺少本地模板图，请先联网同步模板图后再拍摄。',
+        failureType: SceneTransferFailureType.noReferenceImages,
       );
     }
 
@@ -357,14 +360,16 @@ class HomeWorkflowController {
       );
     }
 
-    if (currentPointComparison.match!.similarityPercent <
-        minimumMatchThreshold) {
+    // 与当前点位匹配成功 → 直接返回
+    if (currentPointComparison.match!.similarityPercent >=
+        directMatchThreshold) {
       return decideSceneMatch(
         currentScene: scene,
         currentPointMatch: currentPointComparison.match,
       );
     }
 
+    // 与当前点位不匹配 → 检查全图库其他点位
     final otherPointMatches = <PointMatchCandidate>[];
     for (final peerScene in await _loadCandidateScenes(
       currentSceneId: scene.id,
@@ -442,10 +447,38 @@ class HomeWorkflowController {
             onTimeout: () => throw Exception('请求超时，请检查网络或服务器状态'),
           );
 
+      var totalScenes = 0;
+      var cachedScenes = 0;
+      var failedScenes = 0;
+      var failedSceneIds = const <String>[];
+
+      if (isOnline) {
+        final allScenes = await _ref
+            .read(sceneServiceProvider)
+            .getAllScenesForMatching();
+        final warmupTargetScenes = allScenes.isNotEmpty
+            ? allScenes
+            : _ref.read(homeViewModelProvider).scenes;
+        final warmupResult = await _ref
+            .read(styleImageServiceProvider)
+            .warmupStyleImagesForScenes(warmupTargetScenes);
+        totalScenes = warmupResult.totalScenes;
+        cachedScenes = warmupResult.cachedScenes;
+        failedScenes = warmupResult.failedScenes;
+        failedSceneIds = warmupResult.failedSceneIds;
+      }
+
       _ref.invalidate(styleImagesForSelectedSceneProvider);
       _ref.invalidate(referenceImageUrlProvider);
 
-      return SyncDataResult(success: true, isOnline: isOnline);
+      return SyncDataResult(
+        success: true,
+        isOnline: isOnline,
+        totalScenes: totalScenes,
+        cachedScenes: cachedScenes,
+        failedScenes: failedScenes,
+        failedSceneIds: failedSceneIds,
+      );
     } catch (e) {
       var message = e.toString();
       if (message.startsWith('Exception: ')) {
@@ -464,15 +497,25 @@ class HomeWorkflowController {
     required SceneData scene,
     required bool persistResult,
   }) async {
-    final similarity =
-        _buildCachedConfirmedSimilarity(scene) ??
-        await validateSceneSimilarity(scene);
-    if (!similarity.passed) {
-      return SceneTransferResult.failure(
-        similarity.reason,
-        similarity: similarity,
-        failureType: similarity.failureType,
-      );
+    SceneSimilarityResult? similarity;
+    if (!scene.skipSimilarityCheck) {
+      final hasLocalTemplates = await _hasAnyLocalReferenceTemplate(scene.id);
+      if (!hasLocalTemplates) {
+        return SceneTransferResult.failure(
+          '当前点位缺少本地模板图，请先联网同步模板图后再提交。',
+          failureType: SceneTransferFailureType.noReferenceImages,
+        );
+      }
+
+      final checkedSimilarity = await validateSceneSimilarity(scene);
+      if (!checkedSimilarity.passed) {
+        return SceneTransferResult.failure(
+          checkedSimilarity.reason,
+          similarity: checkedSimilarity,
+          failureType: checkedSimilarity.failureType,
+        );
+      }
+      similarity = checkedSimilarity;
     }
 
     final imagePath = scene.capturedImage;
@@ -529,30 +572,6 @@ class HomeWorkflowController {
     }
   }
 
-  SceneSimilarityResult? _buildCachedConfirmedSimilarity(SceneData scene) {
-    if (!scene.lastSimilarityPassed) {
-      return null;
-    }
-
-    final similarityPercent = scene.lastSimilarityPercent;
-    final similarityLevel = scene.lastSimilarityLevel;
-    if (similarityPercent == null || similarityLevel == null) {
-      return null;
-    }
-
-    return SceneSimilarityResult(
-      passed: true,
-      matchedSceneId: scene.id,
-      matchedSceneName: scene.name,
-      bestStyleImageId: scene.lastSimilarityStyleImageId,
-      bestSimilarityPercent: similarityPercent,
-      bestSimilarityLevel: similarityLevel,
-      bestMatchedFeatureCount: 0,
-      reason: '匹配成功，相似性$similarityLevel',
-      failureType: SceneTransferFailureType.none,
-    );
-  }
-
   Future<List<_ReferenceCandidate>> _loadReferenceCandidates(
     String sceneId,
   ) async {
@@ -561,7 +580,17 @@ class HomeWorkflowController {
 
     final styleImages = await styleService.getStyleImagesByScene(sceneId);
     if (styleImages.isEmpty) {
-      return <_ReferenceCandidate>[];
+      final fallbackFiles = await cacheService.listFilesInSubdir(
+        'style_images/$sceneId',
+      );
+      return fallbackFiles
+          .map(
+            (path) => _ReferenceCandidate(
+              styleImageId: _buildFallbackStyleImageId(path),
+              localPath: path,
+            ),
+          )
+          .toList(growable: false);
     }
 
     final candidates = <_ReferenceCandidate>[];
@@ -592,6 +621,25 @@ class HomeWorkflowController {
     }
 
     return candidates;
+  }
+
+  Future<bool> _hasAnyLocalReferenceTemplate(String sceneId) async {
+    final files = await _ref
+        .read(localCacheServiceProvider)
+        .listFilesInSubdir('style_images/$sceneId');
+    return files.isNotEmpty;
+  }
+
+  String _buildFallbackStyleImageId(String path) {
+    final separators = ['/', '\\'];
+    var filename = path;
+    for (final separator in separators) {
+      final index = filename.lastIndexOf(separator);
+      if (index >= 0 && index < filename.length - 1) {
+        filename = filename.substring(index + 1);
+      }
+    }
+    return 'local_$filename';
   }
 
   Future<_PointComparisonSummary> _compareSceneReferences({

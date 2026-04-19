@@ -18,6 +18,7 @@ class SceneData {
   double? lastSimilarityPercent;
   String? lastSimilarityLevel;
   String? lastSimilarityStyleImageId;
+  bool skipSimilarityCheck;
 
   SceneData({
     required this.id,
@@ -36,6 +37,7 @@ class SceneData {
     this.lastSimilarityPercent,
     this.lastSimilarityLevel,
     this.lastSimilarityStyleImageId,
+    this.skipSimilarityCheck = false,
   });
 
   // 从JSON创建
@@ -63,6 +65,7 @@ class SceneData {
       lastSimilarityLevel: json['lastSimilarityLevel']?.toString(),
       lastSimilarityStyleImageId: json['lastSimilarityStyleImageId']
           ?.toString(),
+      skipSimilarityCheck: json['skipSimilarityCheck'] == true,
     );
   }
 
@@ -91,6 +94,7 @@ class SceneData {
       'lastSimilarityPercent': lastSimilarityPercent,
       'lastSimilarityLevel': lastSimilarityLevel,
       'lastSimilarityStyleImageId': lastSimilarityStyleImageId,
+      'skipSimilarityCheck': skipSimilarityCheck,
     };
   }
 
@@ -124,6 +128,7 @@ class SceneData {
     bool clearLastSimilarityLevel = false,
     String? lastSimilarityStyleImageId,
     bool clearLastSimilarityStyleImageId = false,
+    bool? skipSimilarityCheck,
   }) {
     return SceneData(
       id: id ?? this.id,
@@ -152,12 +157,13 @@ class SceneData {
       lastSimilarityStyleImageId: clearLastSimilarityStyleImageId
           ? null
           : (lastSimilarityStyleImageId ?? this.lastSimilarityStyleImageId),
+      skipSimilarityCheck: skipSimilarityCheck ?? this.skipSimilarityCheck,
     );
   }
 
   @override
   String toString() {
-    return 'SceneData(id: $id, name: $name, roomId: $roomId, roomName: $roomName, pointCode: $pointCode, location: $location, capturedImage: $capturedImage, captureTime: $captureTime, transferTime: $transferTime, isTransferred: $isTransferred, latestStatus: $latestStatus, hasIssue: $hasIssue)';
+    return 'SceneData(id: $id, name: $name, roomId: $roomId, roomName: $roomName, pointCode: $pointCode, location: $location, capturedImage: $capturedImage, captureTime: $captureTime, transferTime: $transferTime, isTransferred: $isTransferred, latestStatus: $latestStatus, hasIssue: $hasIssue, skipSimilarityCheck: $skipSimilarityCheck)';
   }
 
   @override
@@ -179,7 +185,8 @@ class SceneData {
         other.lastSimilarityPassed == lastSimilarityPassed &&
         other.lastSimilarityPercent == lastSimilarityPercent &&
         other.lastSimilarityLevel == lastSimilarityLevel &&
-        other.lastSimilarityStyleImageId == lastSimilarityStyleImageId;
+        other.lastSimilarityStyleImageId == lastSimilarityStyleImageId &&
+        other.skipSimilarityCheck == skipSimilarityCheck;
   }
 
   @override
@@ -199,6 +206,7 @@ class SceneData {
         lastSimilarityPassed.hashCode ^
         lastSimilarityPercent.hashCode ^
         lastSimilarityLevel.hashCode ^
-        lastSimilarityStyleImageId.hashCode;
+        lastSimilarityStyleImageId.hashCode ^
+        skipSimilarityCheck.hashCode;
   }
 }

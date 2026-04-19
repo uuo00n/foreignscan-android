@@ -5,7 +5,7 @@ import 'package:camera/camera.dart';
 import 'package:foreignscan/core/providers/camera_providers.dart';
 import 'package:foreignscan/core/widgets/loading_widget.dart';
 import '../core/widgets/error_widget.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});

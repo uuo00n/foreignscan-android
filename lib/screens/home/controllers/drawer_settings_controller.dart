@@ -41,10 +41,12 @@ class DrawerServerSettings {
 class DrawerConnectionResult {
   final bool isConnected;
   final String message;
+  final bool didBind;
 
   const DrawerConnectionResult({
     required this.isConnected,
     required this.message,
+    this.didBind = false,
   });
 }
 
@@ -141,6 +143,7 @@ class DrawerSettingsController {
       );
     }
 
+    var didBind = false;
     try {
       final serverConfigService = _ref.read(serverConfigServiceProvider);
       final current = await serverConfigService.load();
@@ -158,6 +161,7 @@ class DrawerSettingsController {
             message: bindResult.message,
           );
         }
+        didBind = true;
       } else if ((current.padKey ?? '').trim().isEmpty) {
         return const DrawerConnectionResult(
           isConnected: false,
@@ -182,6 +186,10 @@ class DrawerSettingsController {
       _ref.read(loggerProvider).w('持久化服务器设置失败: $e');
     }
 
-    return const DrawerConnectionResult(isConnected: true, message: '连接成功');
+    return DrawerConnectionResult(
+      isConnected: true,
+      message: '连接成功',
+      didBind: didBind,
+    );
   }
 }

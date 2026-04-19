@@ -198,7 +198,7 @@ flutter build ios --release
 
 ### 主题定制
 
-在 `lib/core/theme/app_theme.dart` 中可以自定义颜色和主题样式：
+在 `lib/theme.dart` 中可以自定义颜色和主题样式：
 
 ```dart
 

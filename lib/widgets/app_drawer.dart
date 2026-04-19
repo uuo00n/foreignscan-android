@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/providers/app_info_providers.dart';
 import 'package:foreignscan/widgets/about_app_dialog.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 import 'package:foreignscan/screens/home/controllers/drawer_settings_controller.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
@@ -66,6 +66,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   Future<void> _testConnection() async {
     // 中文注释：防并发与防抖，若当前已在连接测试中，直接返回，避免多次快速点击导致并发和动画堆叠
     if (_isConnecting) return;
+    _dismissInputFocus();
 
     // 中文注释：立即标记为连接中，阻止再次点击。
     setState(() {
@@ -89,6 +90,18 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       _testStatusText = result.message;
       _statusVersion++; // 中文注释：每次结果更新递增版本，避免 AnimatedSwitcher 在快速重复状态下的重复 Key
     });
+
+    // 中文注释：若本次为“重绑成功”，自动触发一次完整同步，确保模板图可离线使用
+    if (result.isConnected && result.didBind && widget.onSyncPressed != null) {
+      final isWiredMode = _serverSettings.isWiredMode;
+      if (mounted) {
+        _dismissInputFocus();
+        Navigator.pop(context);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onSyncPressed?.call(isWiredMode);
+      });
+    }
   }
 
   void _resetConnectionStatus() {
@@ -97,11 +110,16 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     _testStatusText = null;
   }
 
+  void _dismissInputFocus() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         children: [
           DrawerHeader(
             decoration: const BoxDecoration(gradient: AppTheme.primaryGradient),
@@ -358,6 +376,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             title: const Text('同步数据'),
             onTap: () {
               // 关闭抽屉并触发同步回调
+              _dismissInputFocus();
               Navigator.pop(context);
               widget.onSyncPressed?.call(_serverSettings.isWiredMode);
             },
@@ -367,6 +386,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             leading: const Icon(Icons.settings, color: AppTheme.primaryColor),
             title: const Text('设置'),
             onTap: () {
+              _dismissInputFocus();
               Navigator.pop(context);
               AppRouter.navigateToSettings();
             },
@@ -381,6 +401,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
               // 中文注释：先关闭抽屉，再使用全局 Navigator 的上下文弹出“关于”对话框，
               // 避免使用已卸载的 Drawer 上下文导致 InheritedWidget（如 ListTileTheme）在卸载时仍有依赖，触发断言错误。
+              _dismissInputFocus();
               Navigator.pop(context);
               // 中文注释：使用下一帧回调确保 Drawer 完成关闭与元素卸载，
               // 再安全地弹出对话框，避免 InheritedWidget 在卸载过程中仍被依赖。

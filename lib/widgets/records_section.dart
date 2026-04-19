@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:foreignscan/core/services/detection_service.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 import 'package:foreignscan/models/detection_result.dart';
 import 'package:foreignscan/models/inspection_record.dart';
 import 'package:foreignscan/screens/record_detail_page.dart';

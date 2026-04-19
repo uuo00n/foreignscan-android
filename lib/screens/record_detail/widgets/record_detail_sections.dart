@@ -6,7 +6,7 @@ import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/services/detection_service.dart';
 import 'package:foreignscan/core/services/scene_service.dart';
 import 'package:foreignscan/core/services/style_image_service.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 import 'package:foreignscan/models/detection_result.dart';
 import 'package:foreignscan/models/inspection_record.dart';
 import 'package:foreignscan/models/scene_data.dart';

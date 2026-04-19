@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:foreignscan/config/app_constants.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 import 'package:foreignscan/screens/home_page.dart';
 import 'package:foreignscan/screens/camera_screen.dart';
 import 'package:foreignscan/screens/detection_result_screen.dart';

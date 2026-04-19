@@ -167,4 +167,27 @@ class LocalCacheService {
     }
     return null; // 目录存在但没有文件
   }
+
+  /// 列出指定子目录下的所有文件绝对路径（不递归）
+  /// 中文说明：
+  /// - 目录不存在时返回空列表；
+  /// - 仅返回 File，忽略目录与软链接；
+  /// - 返回结果按路径字典序排序，便于上层稳定选择。
+  Future<List<String>> listFilesInSubdir(String subdir) async {
+    final baseDir = await getApplicationDocumentsDirectory();
+    final targetDir = Directory(p.join(baseDir.path, subdir));
+    if (!await targetDir.exists()) {
+      return <String>[];
+    }
+
+    final files = <String>[];
+    final entries = targetDir.listSync(followLinks: false);
+    for (final e in entries) {
+      if (e is File) {
+        files.add(e.path);
+      }
+    }
+    files.sort();
+    return files;
+  }
 }

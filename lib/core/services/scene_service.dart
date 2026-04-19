@@ -195,7 +195,11 @@ class SceneService {
     }
   }
 
-  Future<void> updateSceneImage(String sceneId, String imagePath) async {
+  Future<void> updateSceneImage(
+    String sceneId,
+    String imagePath, {
+    bool skipSimilarityCheck = false,
+  }) async {
     try {
       final scenes = await getScenes();
       final updatedScenes = scenes.map((scene) {
@@ -207,6 +211,7 @@ class SceneService {
             clearLastSimilarityPercent: true,
             clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
+            skipSimilarityCheck: skipSimilarityCheck,
           );
         }
         return scene;
@@ -267,6 +272,7 @@ class SceneService {
             clearLastSimilarityPercent: true,
             clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
+            skipSimilarityCheck: false,
           );
         }
 
@@ -278,6 +284,7 @@ class SceneService {
             clearLastSimilarityPercent: true,
             clearLastSimilarityLevel: true,
             clearLastSimilarityStyleImageId: true,
+            skipSimilarityCheck: false,
           );
         }
 

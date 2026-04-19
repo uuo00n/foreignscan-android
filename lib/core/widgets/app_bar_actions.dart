@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 
 /// 统一的AppBar操作按钮组件
 class AppBarActions extends StatelessWidget {

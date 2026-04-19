@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/scene_data.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 
 class SceneTile extends StatelessWidget {
   final SceneData scene;
@@ -13,6 +13,31 @@ class SceneTile extends StatelessWidget {
     required this.isSelected,
     required this.onTap,
   });
+
+  static Color resolveIndicatorColor(SceneData scene) {
+    final hasDetectionStatus =
+        scene.latestStatus != null && scene.latestStatus != 'none';
+    if (hasDetectionStatus) {
+      if (scene.latestStatus == '已检测') {
+        return (scene.hasIssue == true)
+            ? AppTheme.errorColor
+            : AppTheme.successColor;
+      }
+      return AppTheme.warningColor;
+    }
+
+    if (scene.isTransferred) {
+      return AppTheme.successColor;
+    }
+
+    final hasCapturedImage =
+        scene.capturedImage != null && scene.capturedImage!.isNotEmpty;
+    if (hasCapturedImage) {
+      return AppTheme.warningColor;
+    }
+
+    return AppTheme.textSecondary;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,23 +96,18 @@ class SceneTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis, // 名称过长时省略
               maxLines: 1,
             ),
-            // 新增：小圆点指示状态
-            if (scene.latestStatus != null && scene.latestStatus != 'none')
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: (scene.latestStatus == '已检测')
-                        ? ((scene.hasIssue == true)
-                              ? AppTheme.errorColor
-                              : AppTheme.successColor)
-                        : AppTheme.warningColor,
-                    shape: BoxShape.circle,
-                  ),
+            // 小圆点指示：优先检测状态；未检测时显示拍摄/上传三态
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: resolveIndicatorColor(scene),
+                  shape: BoxShape.circle,
                 ),
               ),
+            ),
           ],
         ),
       ),

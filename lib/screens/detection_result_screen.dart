@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/routes/app_router.dart';
 import 'package:foreignscan/core/services/detection_service.dart';
 import 'package:foreignscan/core/services/scene_service.dart';
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 import 'package:foreignscan/core/widgets/app_bar_actions.dart';
 import 'package:foreignscan/models/detection_result.dart';
 import 'package:foreignscan/models/scene_data.dart';

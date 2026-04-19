@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foreignscan/core/providers/app_providers.dart';
 import 'package:foreignscan/core/providers/camera_providers.dart'
     as camera_providers;
-import 'package:foreignscan/core/theme/app_theme.dart';
+import 'package:foreignscan/theme.dart';
 
 class ImageUploadScreen extends ConsumerStatefulWidget {
   final String? imagePath;
